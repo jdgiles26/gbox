@@ -21,4 +21,4 @@ venv/
 .idea/
 *.iml
 
-demo.py
+*demo.py
