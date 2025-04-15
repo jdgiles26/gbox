@@ -458,42 +458,55 @@ class Box:
         """
         Copies a file or directory from the Box to a local path, or vice-versa.
 
-        Determines direction based on which path exists locally.
-        - If `source` exists locally -> Upload (put_archive)
-        - If `target` parent dir exists locally -> Download (get_archive)
+        Uses the "box:" prefix to determine the direction:
+        - Download: copy(source="box:/path/in/box", target="/local/path")
+        - Upload:   copy(source="/local/path", target="box:/path/in/box")
 
         Args:
-            source: Source path (local or inside the Box).
-            target: Target path (local or inside the Box).
+            source: Source path (local path or "box:/path/in/box").
+            target: Target path (local path or "box:/path/in/box").
 
         Raises:
-            ValueError: If both or neither paths seem local, or direction is ambiguous.
-            FileNotFoundError: If a local source path doesn't exist.
+            ValueError: If copy direction is invalid (box->box, local->local) or ambiguous.
+            FileNotFoundError: If a local source path for upload doesn't exist.
             APIError, NotFound, TarError, etc.: Propagated from get/put_archive.
         """
-        source_is_local = os.path.exists(source)
-        # Check if target *directory* exists for download case
-        target_dir = os.path.dirname(target)
-        target_dir_exists_local = (
-            os.path.exists(target_dir) if target_dir else True
-        )  # Handle target in root
+        is_source_box = source.startswith("box:")
+        is_target_box = target.startswith("box:")
 
-        if source_is_local and not target_dir_exists_local:
-            # Upload: source is local file/dir, target is remote path
-            # Target path for put_archive is the destination *inside* the box
-            self.put_archive(path=target, data=source)
-        elif not source_is_local and target_dir_exists_local:
-            # Download: source is remote path, target is local file/dir path
-            # Use get_archive with local_path set to the target
-            self.get_archive(path=source, local_path=target)
-        elif source_is_local and target_dir_exists_local:
-            raise ValueError(
-                f"Ambiguous copy: Both source ('{source}') and target directory ('{target_dir}') exist locally. Cannot determine copy direction."
-            )
-        else:  # Neither source exists locally nor target directory exists locally
-            raise ValueError(
-                f"Cannot determine copy direction: Source path '{source}' does not exist locally, and target directory '{target_dir}' does not exist locally."
-            )
+        if is_source_box and is_target_box:
+            raise ValueError("Cannot copy directly between two Box paths using Box.copy.")
+        elif not is_source_box and not is_target_box:
+            # Consider if local copy should be supported here using shutil, or raise error.
+            # For now, raising error as it's outside the scope of Box interaction.
+            raise ValueError("Cannot copy between two local paths using Box.copy.")
+        elif is_source_box:  # Download (Box -> Local)
+            if is_target_box: # Should be caught above, but for clarity
+                raise ValueError("Target for download cannot be a Box path.")
+            box_path = source.removeprefix("box:")
+            # get_archive handles extracting the file/directory to the target local path
+            self.get_archive(path=box_path, local_path=target)
+            print(f"Downloaded from box:{box_path} to {target}") # Added logging
+        elif is_target_box: # Upload (Local -> Box)
+            if is_source_box: # Should be caught above
+                raise ValueError("Source for upload cannot be a Box path.")
+            # Check if local source path exists before proceeding
+            if not os.path.exists(source):
+                raise FileNotFoundError(f"Local source path not found for upload: {source}")
+            box_path_full = target.removeprefix("box:")
+            # put_archive expects the target *directory* in the box
+            box_target_dir = os.path.dirname(box_path_full)
+            if not box_target_dir: # Handle case where target is in root directory
+                box_target_dir = "/"
+            
+            # put_archive handles creating tar from local source (if needed) and uploading
+            # Pass the local source path string directly to `data` argument 
+            # Pass the target directory inside the box to the `path` argument
+            self.put_archive(path=box_target_dir, data=source)
+            print(f"Uploaded {source} to {target} (target directory: {box_target_dir})") # Updated logging
+        else:
+            # This case should not be reachable if prefixes are used correctly
+            raise ValueError("Ambiguous copy direction. Use 'box:' prefix for Box paths.")
 
     def __eq__(self, other):
         if not isinstance(other, Box):

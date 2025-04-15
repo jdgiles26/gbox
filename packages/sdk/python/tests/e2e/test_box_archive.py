@@ -317,13 +317,17 @@ def test_copy_method(test_box: Box):
             local_filename_basename = os.path.basename(local_tmp_file_path)
 
         print(f"Created temporary local file: {local_tmp_file_path}")
-        target_box_path = f"box:{upload_dir_in_box}"
+        # target_box_path = f"box:{upload_dir_in_box}" # Original line
+        # Construct the full target path including the filename
+        target_box_path_with_filename = f"box:{upload_dir_in_box}/{local_filename_basename}"
         expected_file_in_box = f"{upload_dir_in_box}/{local_filename_basename}"
         print(
-            f"Uploading {local_tmp_file_path} to {target_box_path} (expected in box: {expected_file_in_box})"
+            # f"Uploading {local_tmp_file_path} to {target_box_path} (expected in box: {expected_file_in_box})" # Original print
+            f"Uploading {local_tmp_file_path} to {target_box_path_with_filename}" # Updated print
         )
 
-        test_box.copy(source=local_tmp_file_path, target=target_box_path)
+        # test_box.copy(source=local_tmp_file_path, target=target_box_path) # Original call
+        test_box.copy(source=local_tmp_file_path, target=target_box_path_with_filename) # Use target with filename
         print("copy (upload) call successful.")
 
         # Verify using box.run
@@ -381,7 +385,7 @@ def test_copy_method(test_box: Box):
         # c) Upload non-existent local file
         with pytest.raises(FileNotFoundError):
             print("Testing copy (upload non-existent local file)")
-            test_box.copy(source="/no/such/local/file.xyz", target=target_box_path)
+            test_box.copy(source="/no/such/local/file.xyz", target=target_box_path_with_filename)
 
         # d) Download non-existent box file
         with pytest.raises(APIError) as excinfo:
@@ -396,7 +400,7 @@ def test_copy_method(test_box: Box):
         with tempfile.TemporaryDirectory() as tmp_dir_for_upload:
             with pytest.raises(IsADirectoryError):
                 print("Testing copy (upload local directory)")
-                test_box.copy(source=tmp_dir_for_upload, target=target_box_path)
+                test_box.copy(source=tmp_dir_for_upload, target=target_box_path_with_filename)
 
         # f) Download box directory to local file (should fail)
         with tempfile.TemporaryDirectory() as tmp_dir_for_download:

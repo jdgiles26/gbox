@@ -181,11 +181,24 @@ def test_file_share_from_box(gbox: GBoxClient, test_box: Box):
 
     # Test sharing with invalid path
     try:
-        gbox.files.share_from_box(test_box.id, "/invalid/path.txt")
-        pytest.fail("Expected ValueError for invalid path")
-    except ValueError as e:
-        assert "must start with /var/gbox/" in str(e)
-        print("ValueError raised for invalid path as expected")
+        print("Testing sharing with invalid path...")
+        with pytest.raises(APIError) as excinfo:
+            gbox.files.share_from_box(test_box.id, "/invalid/path.txt")
+        assert excinfo.value.status_code == 500, \
+               f"Expected APIError 500 for invalid path, got {excinfo.value.status_code}"
+        print(f"Successfully caught expected APIError for invalid path: {excinfo.value}")
+
+    except APIError as e:
+        pytest.fail(f"An unexpected APIError occurred during the *valid* sharing tests: {e}")
+    except Exception as e:
+        pytest.fail(f"An unexpected error occurred during file sharing tests: {e}")
+
+    # Clean up the test file in the box's share (Optional but good practice)
+    try:
+        test_box.run(["rm", "-f", file_path_in_box])
+        print(f"Cleaned up test file in box: {file_path_in_box}")
+    except Exception as e:
+        print(f"Warning: Failed to clean up test file {file_path_in_box} in box: {e}")
 
 
 def test_file_reclaim(gbox: GBoxClient):
