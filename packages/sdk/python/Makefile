@@ -1,5 +1,5 @@
-.PHONY: clean clean-test clean-pyc clean-build docs help format lint test test-all coverage start install-dev-tools test-e2e fix-lint
-.DEFAULT_GOAL := help
+.PHONY: clean clean-test clean-pyc clean-build docs help format lint test test-all coverage start install-dev-tools test-e2e fix-lint dist
+.DEFAULT_GOAL := help 
 
 help: ## Show help message
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' Makefile | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
@@ -11,6 +11,9 @@ start: install-dev-tools ## Install all required dependencies and development to
 	pip install -e ".[dev]"
 
 clean: clean-build clean-pyc clean-test ## Remove all build, test, coverage and Python artifacts
+
+dist: ## Build distribution
+	python -m build
 
 clean-build: ## Remove build artifacts
 	rm -fr build/
@@ -57,3 +60,6 @@ coverage: test ## Check code coverage
 	coverage report -m
 	coverage html
 	open htmlcov/index.html 
+
+upload-pypi: dist ## Upload package to PyPI
+	twine upload dist/* 
