@@ -26,7 +26,7 @@ For advanced scenarios, we also kept the ability to run sandboxes in k8s cluster
 4. HTTP Server
    - Start http service on any folder on demand [under-development]
 5. SDKs
-   - Python SDK
+   - Python SDK: Install using `pip install pygbox`. See [PyPI](https://pypi.org/project/pygbox/) for details.
    - Typescript SDK [under-development]
 6. MCP
    - Standard MCP support
