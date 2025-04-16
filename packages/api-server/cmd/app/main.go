@@ -54,7 +54,7 @@ func main() {
 		log.Fatal("Failed to initialize box service: %v", err)
 	}
 
-	fileSvc, err := fileService.New()
+	fileSvc, err := fileService.New(boxSvc)
 	if err != nil {
 		log.Fatal("Failed to initialize file service: %v", err)
 	}

@@ -60,6 +60,9 @@ export const handleRunPython = withLogging(
     );
 
     log({ level: "info", data: "Python code executed successfully" });
+    if (!result.stderr && !result.stdout) {
+      result.stdout = "[No output]";
+    }
     return {
       content: [
         {

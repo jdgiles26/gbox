@@ -3,24 +3,30 @@ package service
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"archive/tar"
+
 	"github.com/babelcloud/gbox/packages/api-server/internal/common"
-	"github.com/babelcloud/gbox/packages/api-server/pkg/file"
+	boxModel "github.com/babelcloud/gbox/packages/api-server/pkg/box"
+	fileModel "github.com/babelcloud/gbox/packages/api-server/pkg/file"
 )
 
 // ShareFile shares a file from a box to the share directory
-func (s *FileService) ShareFile(ctx context.Context, boxID, path string) (*model.FileShareResult, error) {
+func (s *FileService) ShareFile(ctx context.Context, boxID, pathWithBoxID string) (*fileModel.FileShareResult, error) {
 	if boxID == "" {
 		return nil, fmt.Errorf("box ID is required")
 	}
 
-	cleanPath, err := s.validateAndCleanPath(path)
+	cleanPath, err := s.validateAndCleanPath(pathWithBoxID)
 	if err != nil {
 		return nil, err
 	}
+
+	// TODO: need to check if the file is a directory, only file can be shared
 
 	// Check if path starts with default share directory path
 	if strings.HasPrefix(cleanPath, "/"+boxID+common.DefaultShareDirPath) {
@@ -39,11 +45,14 @@ func (s *FileService) ShareFile(ctx context.Context, boxID, path string) (*model
 			if err != nil {
 				log.Error("Error getting file list: %v", err)
 			}
-			return &model.FileShareResult{
+			return &fileModel.FileShareResult{
 				Success:  true,
 				Message:  "File already exists",
 				FileList: fileList,
 			}, nil
+		} else {
+			// File does not exist, raise error
+			return nil, fmt.Errorf("file does not exist")
 		}
 	}
 
@@ -59,8 +68,51 @@ func (s *FileService) ShareFile(ctx context.Context, boxID, path string) (*model
 		return nil, fmt.Errorf("failed to create target directory: %v", err)
 	}
 
-	// TODO: Implement file sharing from box to share directory
-	// This will require integration with the box service to get the file content
+	// Get file from box
+	archiveResult, reader, err := s.boxSvc.GetArchive(ctx, boxID, &boxModel.BoxArchiveGetParams{
+		Path: cleanPath,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get file from box: %v", err)
+	}
+	defer reader.Close()
+
+	// Create the target file
+	targetPath := filepath.Join(boxShareDir, cleanPath)
+	targetFile, err := os.Create(targetPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create target file: %v", err)
+	}
+	defer targetFile.Close()
+
+	// Extract the file from tar archive
+	tarReader := tar.NewReader(reader)
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to read tar header: %v", err)
+		}
+
+		// Skip if not a regular file
+		if header.Typeflag != tar.TypeReg {
+			continue
+		}
+
+		// Write the file content
+		_, err = io.Copy(targetFile, tarReader)
+		if err != nil {
+			return nil, fmt.Errorf("failed to write file content: %v", err)
+		}
+		break // We only need the first file
+	}
+
+	// Set file permissions
+	if err := os.Chmod(targetPath, os.FileMode(archiveResult.Mode)); err != nil {
+		return nil, fmt.Errorf("failed to set file permissions: %v", err)
+	}
 
 	// Get the list of shared files
 	fileList, err := getFileList(filepath.Join(boxShareDir, cleanPath))
@@ -68,7 +120,7 @@ func (s *FileService) ShareFile(ctx context.Context, boxID, path string) (*model
 		log.Error("Error getting file list: %v", err)
 	}
 
-	return &model.FileShareResult{
+	return &fileModel.FileShareResult{
 		Success:  true,
 		Message:  "File shared successfully",
 		FileList: fileList,

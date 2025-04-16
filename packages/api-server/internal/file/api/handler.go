@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/babelcloud/gbox/packages/api-server/pkg/file"
 	"github.com/babelcloud/gbox/packages/api-server/internal/file/service"
+	model "github.com/babelcloud/gbox/packages/api-server/pkg/file"
 	"github.com/emicklei/go-restful/v3"
 )
 
@@ -29,7 +29,7 @@ func NewFileHandler(service service.FileService) *FileHandler {
 func (h *FileHandler) HeadFile(req *restful.Request, resp *restful.Response) {
 	path := req.PathParameter("path")
 	if path == "" {
-		writeFileError(resp, http.StatusBadRequest, "INVALID_REQUEST", "Path is required")
+		replyFileError(resp, http.StatusBadRequest, "INVALID_REQUEST", "Path is required")
 		return
 	}
 
@@ -42,14 +42,14 @@ func (h *FileHandler) HeadFile(req *restful.Request, resp *restful.Response) {
 	// Get file metadata
 	stat, err := h.service.HeadFile(req.Request.Context(), cleanPath)
 	if err != nil {
-		writeFileError(resp, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("Error getting file metadata: %v", err))
+		replyFileError(resp, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("Error getting file metadata: %v", err))
 		return
 	}
 
 	// Convert stat to JSON string
 	statJSON, err := json.Marshal(stat)
 	if err != nil {
-		writeFileError(resp, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("Error marshaling stat: %v", err))
+		replyFileError(resp, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("Error marshaling stat: %v", err))
 		return
 	}
 
@@ -65,7 +65,7 @@ func (h *FileHandler) HeadFile(req *restful.Request, resp *restful.Response) {
 func (h *FileHandler) GetFile(req *restful.Request, resp *restful.Response) {
 	path := req.PathParameter("path")
 	if path == "" {
-		writeFileError(resp, http.StatusBadRequest, "INVALID_REQUEST", "Path is required")
+		replyFileError(resp, http.StatusBadRequest, "INVALID_REQUEST", "Path is required")
 		return
 	}
 
@@ -78,7 +78,7 @@ func (h *FileHandler) GetFile(req *restful.Request, resp *restful.Response) {
 	// Get file content
 	content, err := h.service.GetFile(req.Request.Context(), cleanPath)
 	if err != nil {
-		writeFileError(resp, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("Error getting file content: %v", err))
+		replyFileError(resp, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("Error getting file content: %v", err))
 		return
 	}
 	defer content.Reader.Close()
@@ -89,22 +89,27 @@ func (h *FileHandler) GetFile(req *restful.Request, resp *restful.Response) {
 
 	// Copy file content to response
 	if _, err := io.Copy(resp, content.Reader); err != nil {
-		writeFileError(resp, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("Error copying file content: %v", err))
+		replyFileError(resp, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("Error copying file content: %v", err))
 		return
 	}
 }
 
 // HandleFileOperation handles file operations like reclaim and share
 func (h *FileHandler) HandleFileOperation(req *restful.Request, resp *restful.Response) {
-	operation := req.QueryParameter("operation")
-
-	switch operation {
+	var operationReq model.FileOperationParams
+	if err := req.ReadEntity(&operationReq); err != nil {
+		replyFileError(resp, http.StatusBadRequest, "INVALID_REQUEST", fmt.Sprintf("Error reading request body: %v", err))
+		return
+	}
+	switch operationReq.Operation {
 	case "reclaim":
 		h.ReclaimFiles(req, resp)
 	case "share":
-		h.ShareFile(req, resp)
+		h.ShareFile(req, resp, operationReq)
+	case "write":
+		h.WriteFile(req, resp, operationReq)
 	default:
-		writeFileError(resp, http.StatusBadRequest, "INVALID_REQUEST", "Invalid operation")
+		replyFileError(resp, http.StatusBadRequest, "INVALID_REQUEST", "Invalid operation")
 	}
 }
 
@@ -112,7 +117,7 @@ func (h *FileHandler) HandleFileOperation(req *restful.Request, resp *restful.Re
 func (h *FileHandler) ReclaimFiles(req *restful.Request, resp *restful.Response) {
 	response, err := h.service.ReclaimFiles(req.Request.Context())
 	if err != nil {
-		writeFileError(resp, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("Error reclaiming files: %v", err))
+		replyFileError(resp, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("Error reclaiming files: %v", err))
 		return
 	}
 
@@ -120,29 +125,41 @@ func (h *FileHandler) ReclaimFiles(req *restful.Request, resp *restful.Response)
 }
 
 // ShareFile handles sharing a file from a box to the share directory
-func (h *FileHandler) ShareFile(req *restful.Request, resp *restful.Response) {
-	var shareReq model.FileShareParams
-	if err := req.ReadEntity(&shareReq); err != nil {
-		writeFileError(resp, http.StatusBadRequest, "INVALID_REQUEST", fmt.Sprintf("Error reading request body: %v", err))
-		return
-	}
-
+func (h *FileHandler) ShareFile(req *restful.Request, resp *restful.Response, shareReq model.FileOperationParams) {
+	fmt.Println("ShareFile shareReq", shareReq)
 	if shareReq.BoxID == "" || shareReq.Path == "" {
-		writeFileError(resp, http.StatusBadRequest, "INVALID_REQUEST", "Box ID and path are required")
+		replyFileError(resp, http.StatusBadRequest, "INVALID_REQUEST", "Box ID and path are required")
 		return
 	}
 
 	response, err := h.service.ShareFile(req.Request.Context(), shareReq.BoxID, shareReq.Path)
 	if err != nil {
-		writeFileError(resp, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("Error sharing file: %v", err))
+		replyFileError(resp, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("Error sharing file: %v", err))
 		return
 	}
 
 	resp.WriteAsJson(response)
 }
 
-// writeFileError writes a structured error response
-func writeFileError(resp *restful.Response, statusCode int, code, message string) {
+// WriteFile handles PUT requests to write or overwrite file content
+func (h *FileHandler) WriteFile(req *restful.Request, resp *restful.Response, writeReq model.FileOperationParams) {
+	if writeReq.BoxID == "" || writeReq.Path == "" {
+		replyFileError(resp, http.StatusBadRequest, "INVALID_REQUEST", "Box ID and path are required")
+		return
+	}
+
+	// Write file content
+	response, err := h.service.WriteFile(req.Request.Context(), writeReq.BoxID, writeReq.Path, writeReq.Content)
+	if err != nil {
+		replyFileError(resp, http.StatusInternalServerError, "INTERNAL_ERROR", fmt.Sprintf("Error writing file: %v", err))
+		return
+	}
+
+	resp.WriteAsJson(response)
+}
+
+// replyFileError writes a structured error response
+func replyFileError(resp *restful.Response, statusCode int, code, message string) {
 	resp.WriteHeader(statusCode)
 	resp.WriteAsJson(model.FileError{
 		Code:    code,

@@ -7,11 +7,12 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/docker/docker/api/types"
 
-	"github.com/babelcloud/gbox/packages/api-server/pkg/box"
 	"github.com/babelcloud/gbox/packages/api-server/internal/common"
+	"github.com/babelcloud/gbox/packages/api-server/pkg/box"
 )
 
 // Exec implements Service.Exec
@@ -317,6 +318,12 @@ func (s *Service) Run(ctx context.Context, id string, req *model.BoxRunParams) (
 	exitCode := <-exitCodeChan
 
 	return &model.BoxRunResult{
+		Box: model.Box{
+			ID:        containerInfo.Labels[labelID],
+			Status:    containerInfo.State,
+			Image:     containerInfo.Image,
+			CreatedAt: time.Unix(containerInfo.Created, 0),
+		},
 		ExitCode: exitCode,
 		Stdout:   output.stdout,
 		Stderr:   output.stderr,
