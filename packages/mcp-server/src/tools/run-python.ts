@@ -1,8 +1,8 @@
 import { withLogging } from "../utils.js";
 import { config } from "../config.js";
 import { GBox } from "../sdk/index.js";
-import { MCPLogger } from "../mcp-logger.js";
 import { z } from "zod";
+import type { Logger } from "../sdk/types";
 
 export const RUN_PYTHON_TOOL = "run-python";
 export const RUN_PYTHON_DESCRIPTION = `Run Python code in a sandbox. 
@@ -28,8 +28,7 @@ export const runPythonParams = {
 };
 
 export const handleRunPython = withLogging(
-  async (log, { boxId, code }, { signal, sessionId }) => {
-    const logger = new MCPLogger(log);
+  async (logger: Logger, { boxId, code }, { signal, sessionId }) => {
     const gbox = new GBox({
       apiUrl: config.apiServer.url,
       logger,
@@ -59,7 +58,7 @@ export const handleRunPython = withLogging(
       { signal, sessionId }
     );
 
-    log({ level: "info", data: "Python code executed successfully" });
+    logger.info("Python code executed successfully");
     return {
       content: [
         {

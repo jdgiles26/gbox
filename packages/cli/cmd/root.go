@@ -52,7 +52,7 @@ func init() {
 
 	if isGoRun {
 		projectRoot := filepath.Clean(getProjectRoot())
-		scriptDir = filepath.Join(projectRoot, "packages/cli/cmd/script")
+		scriptDir = filepath.Join(projectRoot, "/cmd/script")
 	} else {
 		realExePath, err := filepath.EvalSymlinks(exePath)
 		if err != nil {

@@ -1,0 +1,22 @@
+# Git directory
+.git
+
+# Node modules
+node_modules
+
+# Build output directory
+dist
+
+# Local environment variables
+.env*
+! .env.defaults
+
+# Log files
+*.log
+
+# IDE and editor config
+.vscode
+.idea
+
+# Test reports
+coverage 

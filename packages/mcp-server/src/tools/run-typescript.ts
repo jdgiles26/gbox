@@ -1,8 +1,8 @@
 import { withLogging } from "../utils.js";
 import { config } from "../config.js";
 import { GBox } from "../sdk/index.js";
-import { MCPLogger } from "../mcp-logger.js";
 import { z } from "zod";
+import type { Logger } from "../sdk/types";
 
 export const RUN_TYPESCRIPT_TOOL = "run-typescript";
 export const RUN_TYPESCRIPT_DESCRIPTION = `Run TypeScript code in a sandbox. 
@@ -33,8 +33,7 @@ export const runTypescriptParams = {
 };
 
 export const handleRunTypescript = withLogging(
-  async (log, { boxId, code }, { signal, sessionId }) => {
-    const logger = new MCPLogger(log);
+  async (logger: Logger, { boxId, code }, { signal, sessionId }) => {
     const gbox = new GBox({
       apiUrl: config.apiServer.url,
       logger,
@@ -64,7 +63,7 @@ export const handleRunTypescript = withLogging(
       { signal, sessionId }
     );
 
-    log({ level: "info", data: "TypeScript code executed successfully" });
+    logger.info("TypeScript code executed successfully");
     return {
       content: [
         {

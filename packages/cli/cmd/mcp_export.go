@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,11 +12,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Define the structure for the new MCP server entry using URL
+type McpServerEntry struct {
+	Url string `json:"url"`
+}
+
+// Keep McpConfig using the specific new entry type for generation
 type McpConfig struct {
-	McpServers map[string]struct {
-		Command string   `json:"command"`
-		Args    []string `json:"args"`
-	} `json:"mcpServers"`
+	McpServers map[string]McpServerEntry `json:"mcpServers"`
+}
+
+// Define a generic structure to read potentially mixed-format existing config
+type GenericMcpConfig struct {
+	McpServers map[string]json.RawMessage `json:"mcpServers"`
 }
 
 func NewMcpExportCommand() *cobra.Command {
@@ -24,7 +33,7 @@ func NewMcpExportCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "export",
-		Short: "Export MCP configuration for Claude Desktop",
+		Short: "Export MCP configuration for Claude Desktop/Cursor",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return exportConfig(mergeTo, dryRun)
 		},
@@ -57,7 +66,15 @@ func getPackagesRootPath() (string, error) {
 	standardSubPath := filepath.Join("packages", "cli")
 
 	if !strings.Contains(realExecPath, standardSubPath) {
-		return "", fmt.Errorf("unexpected binary location: %s; expected to contain %q", realExecPath, standardSubPath)
+		// Try alternative structure if not in standard subpath (e.g., when run via 'go run')
+		cwd, err := os.Getwd()
+		if err == nil {
+			packagesDir := filepath.Join(cwd, "packages")
+			if dirExists(filepath.Join(packagesDir, "mcp-server")) {
+				return packagesDir, nil
+			}
+		}
+		return "", fmt.Errorf("unexpected binary location: %s; expected to contain %q or run from project root", realExecPath, standardSubPath)
 	}
 
 	packagesIndex := strings.Index(realExecPath, standardSubPath)
@@ -65,6 +82,7 @@ func getPackagesRootPath() (string, error) {
 		return "", fmt.Errorf("could not find %q in path: %s", standardSubPath, realExecPath)
 	}
 
+	// Calculate packages directory based on the binary location
 	packagesDir := realExecPath[:packagesIndex]
 	packagesDir = filepath.Clean(filepath.Join(packagesDir, "packages"))
 
@@ -72,7 +90,7 @@ func getPackagesRootPath() (string, error) {
 		return packagesDir, nil
 	}
 
-	return "", fmt.Errorf("could not determine project root from binary location: %s", realExecPath)
+	return "", fmt.Errorf("could not determine packages root directory from binary location: %s", realExecPath)
 }
 
 func dirExists(path string) bool {
@@ -84,23 +102,6 @@ func dirExists(path string) bool {
 }
 
 func exportConfig(mergeTo string, dryRun bool) error {
-	packagesRoot, err := getPackagesRootPath()
-	if err != nil {
-		return fmt.Errorf("failed to find project root: %w", err)
-	}
-
-	mcpServerDir := filepath.Join(packagesRoot, "mcp-server")
-	serverScript := filepath.Join(mcpServerDir, "dist", "index.js")
-
-	if _, err := os.Stat(serverScript); os.IsNotExist(err) {
-		return fmt.Errorf("server script not found at %s\nPlease build the MCP server first by running:\n  cd %s && pnpm build", serverScript, mcpServerDir)
-	}
-
-	serverScriptAbs, err := filepath.Abs(serverScript)
-	if err != nil {
-		return fmt.Errorf("failed to get absolute path for server script: %w", err)
-	}
-
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("failed to get home directory: %w", err)
@@ -109,34 +110,13 @@ func exportConfig(mergeTo string, dryRun bool) error {
 	claudeConfig := filepath.Join(homeDir, "Library", "Application Support", "Claude", "claude_desktop_config.json")
 	cursorConfig := filepath.Join(homeDir, ".cursor", "mcp.json")
 
-	config := McpConfig{
-		McpServers: map[string]struct {
-			Command string   `json:"command"`
-			Args    []string `json:"args"`
-		}{
-			"gbox": {},
-		},
-	}
-
-	if os.Getenv("DEBUG") == "true" {
-		config.McpServers["gbox"] = struct {
-			Command string   `json:"command"`
-			Args    []string `json:"args"`
-		}{
-			Command: "bash",
-			Args: []string{
-				"-c",
-				fmt.Sprintf("cd %s && pnpm --silent dev", mcpServerDir),
+	// configToExport remains the definitive new structure to be added/updated
+	configToExport := McpConfig{
+		McpServers: map[string]McpServerEntry{
+			"gbox": {
+				Url: config.GetMcpServerUrl(), // Use URL from config
 			},
-		}
-	} else {
-		config.McpServers["gbox"] = struct {
-			Command string   `json:"command"`
-			Args    []string `json:"args"`
-		}{
-			Command: "node",
-			Args:    []string{serverScriptAbs},
-		}
+		},
 	}
 
 	if mergeTo != "" {
@@ -153,29 +133,35 @@ func exportConfig(mergeTo string, dryRun bool) error {
 			return fmt.Errorf("failed to create target directory: %w", err)
 		}
 
+		// Use the updated mergeAndMarshalConfigs function which returns final JSON bytes
+		mergedJSON, err := mergeAndMarshalConfigs(targetConfig, configToExport)
+		if err != nil {
+			return fmt.Errorf("failed to merge configurations for '%s': %w", targetConfig, err)
+		}
+
 		if dryRun {
 			fmt.Println("Preview of merged configuration:")
 			fmt.Println("----------------------------------------")
-
-			merged, err := mergeConfigs(targetConfig, config)
-			if err != nil {
-				return fmt.Errorf("failed to merge configurations: %w", err)
+			// Pretty print the final JSON bytes
+			var prettyJSON bytes.Buffer
+			// Indent the final JSON bytes for preview
+			if err := json.Indent(&prettyJSON, mergedJSON, "", "  "); err != nil {
+				// Fallback to non-indented if indent fails (shouldn't happen with valid JSON)
+				fmt.Println(string(mergedJSON))
+				fmt.Println("Warning: Could not pretty-print JSON.")
+			} else {
+				fmt.Println(prettyJSON.String())
 			}
-			output, _ := json.MarshalIndent(merged, "", "  ")
-			fmt.Println(string(output))
 		} else {
-			merged, err := mergeConfigs(targetConfig, config)
-			if err != nil {
-				return fmt.Errorf("failed to merge configurations: %w", err)
-			}
-			output, _ := json.MarshalIndent(merged, "", "  ")
-			if err := os.WriteFile(targetConfig, output, 0644); err != nil {
-				return fmt.Errorf("failed to write configuration: %w", err)
+			// Write the merged JSON bytes directly
+			if err := os.WriteFile(targetConfig, mergedJSON, 0644); err != nil {
+				return fmt.Errorf("failed to write configuration to '%s': %w", targetConfig, err)
 			}
 			fmt.Printf("Configuration merged into %s\n", targetConfig)
 		}
 	} else {
-		output, _ := json.MarshalIndent(config, "", "  ")
+		// Output only the new config if not merging
+		output, _ := json.MarshalIndent(configToExport, "", "  ")
 		fmt.Println(string(output))
 		fmt.Println()
 		fmt.Println("To merge this configuration, run:")
@@ -186,36 +172,52 @@ func exportConfig(mergeTo string, dryRun bool) error {
 	return nil
 }
 
-func mergeConfigs(targetPath string, newConfig McpConfig) (McpConfig, error) {
-	var existing McpConfig
-
+// New function to handle merging generically and return final JSON bytes
+// This replaces the previous mergeConfigs function.
+func mergeAndMarshalConfigs(targetPath string, newConfig McpConfig) ([]byte, error) {
+	// Read existing content
 	content, err := os.ReadFile(targetPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return newConfig, nil
+	if err != nil && !os.IsNotExist(err) {
+		// Return error if reading fails for reasons other than file not existing
+		return nil, fmt.Errorf("failed to read target config '%s': %w", targetPath, err)
+	}
+
+	// Prepare the structure to hold the final merged data using generic RawMessage
+	finalConfigData := GenericMcpConfig{
+		McpServers: make(map[string]json.RawMessage),
+	}
+
+	// If existing config exists and is not empty, unmarshal it generically
+	if err == nil && len(content) > 0 {
+		if err := json.Unmarshal(content, &finalConfigData); err != nil {
+			// If existing JSON is invalid, return error instead of overwriting potentially important data
+			// This prevents destroying a config file that might have other valid entries
+			return nil, fmt.Errorf("invalid JSON in target config '%s', cannot merge safely: %w", targetPath, err)
 		}
-		return McpConfig{}, fmt.Errorf("failed to read target config: %w", err)
+		// Ensure McpServers map is initialized if it was null or missing in the JSON
+		if finalConfigData.McpServers == nil {
+			finalConfigData.McpServers = make(map[string]json.RawMessage)
+		}
 	}
 
-	if len(content) == 0 {
-		return newConfig, nil
+	// Iterate through the *new* config entries we want to add/update (currently only "gbox")
+	for key, newEntryValue := range newConfig.McpServers {
+		// Marshal the specific new entry (McpServerEntry) into json.RawMessage
+		newEntryJSON, err := json.Marshal(newEntryValue)
+		if err != nil {
+			// This should ideally not happen with our defined struct, but check anyway
+			return nil, fmt.Errorf("internal error: failed to marshal new entry for key '%s': %w", key, err)
+		}
+		// Add or replace the entry in the final map using the raw JSON
+		finalConfigData.McpServers[key] = json.RawMessage(newEntryJSON)
 	}
 
-	if err := json.Unmarshal(content, &existing); err != nil {
-		return McpConfig{}, fmt.Errorf("invalid JSON in target config: %w", err)
+	// Marshal the final combined structure back into JSON bytes for writing/preview
+	// Use MarshalIndent for a readable output file format
+	mergedJSON, err := json.MarshalIndent(finalConfigData, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("internal error: failed to marshal final merged config: %w", err)
 	}
 
-	// Merge mcpServers
-	if existing.McpServers == nil {
-		existing.McpServers = make(map[string]struct {
-			Command string   `json:"command"`
-			Args    []string `json:"args"`
-		})
-	}
-
-	for k, v := range newConfig.McpServers {
-		existing.McpServers[k] = v
-	}
-
-	return existing, nil
+	return mergedJSON, nil
 }
