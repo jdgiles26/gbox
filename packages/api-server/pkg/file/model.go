@@ -1,6 +1,5 @@
 package model
 
-
 // FileType represents the type of a file
 type FileType string
 
@@ -30,10 +29,12 @@ type FileError struct {
 	Message string `json:"message"`
 }
 
-// FileShareParams represents a request to share a file from a box
-type FileShareParams struct {
-	BoxID string `json:"boxId"` // ID of the box to share from
-	Path  string `json:"path"`  // Path to the file in the box
+// FileOperationParams represents a request to share a file from a box
+type FileOperationParams struct {
+	BoxID   string `json:"boxId"`   // ID of the box to share from
+	Path    string `json:"path"`    // Path to the file in the box
+	Content string `json:"content"` // Content to write to the file
+	Operation string `json:"operation"` // Operation to perform (share, write, reclaim)
 }
 
 // FileShareResult represents the response for file sharing operations

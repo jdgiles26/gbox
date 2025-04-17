@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/playwright-community/playwright-go"
 
-	"github.com/babelcloud/gbox/packages/api-server/pkg/browser"
+	model "github.com/babelcloud/gbox/packages/api-server/pkg/browser"
 )
 
 // findManagedContext locates a ManagedContext by its ID by iterating.

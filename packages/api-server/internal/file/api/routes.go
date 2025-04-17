@@ -1,7 +1,7 @@
 package api
 
 import (
-	"github.com/babelcloud/gbox/packages/api-server/pkg/file"
+	model "github.com/babelcloud/gbox/packages/api-server/pkg/file"
 	"github.com/emicklei/go-restful/v3"
 )
 
@@ -28,9 +28,8 @@ func RegisterRoutes(ws *restful.WebService, handler *FileHandler) {
 		Returns(500, "Internal Server Error", model.FileError{}))
 
 	ws.Route(ws.POST("/files").To(handler.HandleFileOperation).
-		Doc("handle file operations like reclaim and share").
-		Param(ws.QueryParameter("operation", "operation to perform (reclaim or share)").DataType("string").Required(true)).
-		Reads(model.FileShareParams{}).
+		Doc("handle file operations like reclaim, share and write").
+		Reads(model.FileOperationParams{}).
 		Returns(200, "OK", model.FileShareResult{}).
 		Returns(400, "Bad Request", model.FileError{}).
 		Returns(404, "Not Found", model.FileError{}).

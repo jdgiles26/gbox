@@ -21,6 +21,7 @@ export interface Box {
 }
 
 export interface BoxRunResult {
+  box: Box;
   exitCode: number;
   stdout: string;
   stderr: string;
