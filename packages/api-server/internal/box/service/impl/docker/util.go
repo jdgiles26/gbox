@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/babelcloud/gbox/packages/api-server/config"
 	"github.com/babelcloud/gbox/packages/api-server/internal/box/service"
 	model "github.com/babelcloud/gbox/packages/api-server/pkg/box"
 	"github.com/docker/docker/api/types"
@@ -116,13 +117,31 @@ func containerToBox(c interface{}) *model.Box {
 		createdAt = time.Unix(c.Created, 0)
 	}
 
-	// Extract extra labels (exclude internal labels)
+	// --- Restored Original logic ---
+	// Extract extra labels (exclude internal labels and strip prefix)
 	extraLabels := make(map[string]string)
-	for k, v := range labels {
-		if k != labelID && k != labelName && k != labelInstance {
-			extraLabels[k] = v
+	// Define the prefix to strip. Ensure this matches the prefix used in PrepareLabels.
+	const prefixToStrip = labelPrefix + ".extra." // Should evaluate to "gbox.extra."
+
+	for k, v := range labels { // 'labels' comes from the container info
+		// Exclude specific internal labels used for identification/management
+		if k == labelID || k == labelName || k == labelInstance || k == labelManagedBy || k == labelComponent || k == labelNamespace || k == labelVersion {
+			continue
+		}
+
+		// Check if the key has the extra label prefix and remove it
+		if strings.HasPrefix(k, prefixToStrip) {
+			originalKey := strings.TrimPrefix(k, prefixToStrip)
+			// Prevent adding empty keys if the original label was just the prefix
+			if originalKey != "" {
+				extraLabels[originalKey] = v
+			}
+		} else {
+			// Do nothing for labels that don't have the prefix and are not internal gbox labels.
+			// This effectively filters out labels like desktop.docker.io/*
 		}
 	}
+	// --- End Restored Original logic ---
 
 	return &model.Box{
 		ID:          id,
@@ -160,10 +179,15 @@ func PrepareLabels(boxID string, p *model.BoxCreateParams) map[string]string {
 		labelID:        boxID,
 		labelName:      "gbox",
 		labelInstance:  fmt.Sprintf("gbox-%s", boxID),
-		labelNamespace: "default",
+		labelNamespace: config.GetInstance().Cluster.Namespace,
 		labelVersion:   "v1",
 		labelComponent: "sandbox",
 		labelManagedBy: "gru-api-server",
+
+		// Add standard Docker Compose labels for UI grouping
+		"com.docker.compose.project": config.GetInstance().Cluster.Namespace,
+		"com.docker.compose.service": boxID,
+		"com.docker.compose.oneoff":  "False",
 	}
 
 	// Add command configuration to labels if provided

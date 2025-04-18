@@ -7,7 +7,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/babelcloud/gbox/packages/api-server/pkg/box"
+	model "github.com/babelcloud/gbox/packages/api-server/pkg/box"
 	"github.com/docker/docker/api/types"
 )
 

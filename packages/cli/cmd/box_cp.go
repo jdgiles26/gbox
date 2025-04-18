@@ -163,7 +163,6 @@ func copyFromBoxToStdout(boxPath *BoxPath, apiURL string, debug func(string)) er
 func copyFromBoxToFile(boxPath *BoxPath, dst, apiURL string, debug func(string)) error {
 	// Convert local path to absolute path
 	dst = getAbsolutePath(dst)
-	debug(fmt.Sprintf("Absolute destination path: %s", dst))
 
 	// Create destination directory if it doesn't exist
 	err := os.MkdirAll(filepath.Dir(dst), 0755)
@@ -191,33 +190,77 @@ func copyFromBoxToFile(boxPath *BoxPath, dst, apiURL string, debug func(string))
 	debug(fmt.Sprintf("HTTP response status code: %d", resp.StatusCode))
 
 	if resp.StatusCode != http.StatusOK {
+		// It's helpful to read the body even on error for more details
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		debug(fmt.Sprintf("Error response body: %s", string(bodyBytes)))
 		return fmt.Errorf("failed to download from box, HTTP status code: %d", resp.StatusCode)
 	}
 
-	_, err = io.Copy(tempFile, resp.Body)
-	tempFile.Close()
-	if err != nil {
-		return fmt.Errorf("failed to write to temporary file: %v", err)
+	bytesCopied, copyErr := io.Copy(tempFile, resp.Body)
+	debug(fmt.Sprintf("Bytes copied to temporary file: %d", bytesCopied))
+
+	// Ensure file is closed regardless of copy errors
+	defer tempFile.Close() // Close should happen after potential errors are checked
+
+	// Handle errors after attempting copy and close
+	if copyErr != nil {
+		// Check if the error is specifically UnexpectedEOF, likely from the reader (resp.Body)
+		if copyErr == io.ErrUnexpectedEOF {
+			return fmt.Errorf("failed to download complete file from box (unexpected EOF): %v", copyErr)
+		}
+		// Otherwise, report it as a failure to write to the temp file
+		return fmt.Errorf("failed to write to temporary file: %v", copyErr)
 	}
 
 	// Check format and extract
-	debug(fmt.Sprintf("Extracting archive to: %s", filepath.Dir(dst)))
 	dstDir := filepath.Dir(dst)
 	srcBaseName := filepath.Base(boxPath.Path)
+	dstBaseName := filepath.Base(dst)
 
 	// Try to extract as gzip tar
-	cmd := exec.Command("tar", "-xzf", tempFilePath, "-C", dstDir, srcBaseName)
-	err = cmd.Run()
+	cmd := exec.Command("tar", "-xzf", tempFilePath, "-C", dstDir)
+	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Try to extract as regular tar
-		cmd = exec.Command("tar", "-xf", tempFilePath, "-C", dstDir, srcBaseName)
-		err = cmd.Run()
+		cmd = exec.Command("tar", "-xf", tempFilePath, "-C", dstDir)
+		output, err = cmd.CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("failed to extract archive: %v", err)
+			return fmt.Errorf("failed to extract archive: %v\nOutput:\n%s", err, string(output))
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "Copied from box %s:%s to %s\n", boxPath.BoxID, boxPath.Path, dst)
+	// After extraction, check if the destination path `dst` was intended to be a file or directory.
+	// If `dst` does not end with a separator, assume it was a file.
+	extractedPath := filepath.Join(dstDir, srcBaseName) // Default expected path after extraction
+	finalDstPath := dst
+
+	// Smarter check: Did the tar command create the exact dstBaseName in dstDir?
+	// Or did it potentially create srcBaseName or a path structure?
+	// Let's check if the srcBaseName exists first
+	if _, statErr := os.Stat(extractedPath); statErr == nil {
+		// If the original dst path didn't end with '/' and is different from the extracted path,
+		// it implies the user wanted to copy INTO a file named dstBaseName.
+		if !strings.HasSuffix(dst, string(os.PathSeparator)) && dstBaseName != srcBaseName {
+			if renameErr := os.Rename(extractedPath, finalDstPath); renameErr != nil {
+				return fmt.Errorf("failed to rename extracted file to destination: %v", renameErr)
+			}
+		} else if dstBaseName == srcBaseName {
+			// If dst and src base names match, extraction likely overwrote/created the correct file/dir.
+		} else {
+			// Destination was likely a directory, files extracted inside.
+			finalDstPath = extractedPath // The message should report the actual extracted path
+		}
+	} else {
+		// If srcBaseName doesn't exist directly, maybe tar extracted with full path?
+		// This case is harder to handle reliably without knowing archive structure.
+		// We will assume for now the extraction target was dstDir and tar placed files inside.
+		// The user might need to check dstDir content.
+		// We can try to list files extracted by tar output parsing, but it's complex.
+		// We cannot be sure what the final path is, report the directory
+		finalDstPath = dstDir
+	}
+
+	fmt.Fprintf(os.Stderr, "Copied from box %s:%s to %s\n", boxPath.BoxID, boxPath.Path, finalDstPath)
 	return nil
 }
 
@@ -226,10 +269,6 @@ func copyFromLocalToBox(src, dst, apiURL string, debug func(string)) error {
 	if err != nil {
 		return err
 	}
-
-	debug(fmt.Sprintf("Box ID: %s", boxPath.BoxID))
-	debug(fmt.Sprintf("Destination path: %s", boxPath.Path))
-	debug(fmt.Sprintf("Source path: %s", src))
 
 	if src == "-" {
 		// Copy tar stream from stdin to box
@@ -269,7 +308,6 @@ func copyFromStdinToBox(boxPath *BoxPath, apiURL string, debug func(string)) err
 func copyFromFileToBox(src string, boxPath *BoxPath, apiURL string, debug func(string)) error {
 	// Convert local path to absolute path
 	src = getAbsolutePath(src)
-	debug(fmt.Sprintf("Absolute source path: %s", src))
 
 	// Check if source file exists
 	if _, err := os.Stat(src); os.IsNotExist(err) {
@@ -291,7 +329,6 @@ func copyFromFileToBox(src string, boxPath *BoxPath, apiURL string, debug func(s
 	if err != nil {
 		return fmt.Errorf("failed to create tar archive: %v", err)
 	}
-	debug(fmt.Sprintf("Created tar archive: %s", tempFilePath))
 
 	// Get file size
 	fileInfo, err := os.Stat(tempFilePath)
@@ -308,7 +345,6 @@ func copyFromFileToBox(src string, boxPath *BoxPath, apiURL string, debug func(s
 	defer file.Close()
 
 	requestURL := fmt.Sprintf("%s/boxes/%s/archive?path=%s", apiURL, boxPath.BoxID, boxPath.Path)
-	debug(fmt.Sprintf("Sending PUT request to: %s", requestURL))
 
 	req, err := http.NewRequest("PUT", requestURL, file)
 	if err != nil {

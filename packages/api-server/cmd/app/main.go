@@ -140,7 +140,7 @@ func main() {
 
 	// Start server
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
-	log.Info(format.FormatServerMode(cfg.Cluster.Mode))
+	log.Info("%s", format.FormatServerMode(cfg.Cluster.Mode))
 	log.Info("Starting server on %s", addr)
 
 	// Get all local IPs
