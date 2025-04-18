@@ -1,29 +1,24 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { boxTemplate, handleBoxResource } from "./resources.js";
 import {
-  LIST_BOXES_TOOL,
-  LIST_BOXES_DESCRIPTION,
   RUN_PYTHON_TOOL,
   RUN_PYTHON_DESCRIPTION,
   RUN_BASH_TOOL,
   RUN_BASH_DESCRIPTION,
   READ_FILE_TOOL,
   READ_FILE_DESCRIPTION,
-  handleListBoxes,
+  WRITE_FILE_TOOL,
+  WRITE_FILE_DESCRIPTION,
   handleRunPython,
   handleRunBash,
   handleReadFile,
   runPythonParams,
   runBashParams,
   readFileParams,
+  handleWriteFile,
+  writeFileParams,
 } from "./tools/index.js";
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
-import {
-  handleRunTypescript,
-  RUN_TYPESCRIPT_DESCRIPTION,
-  RUN_TYPESCRIPT_TOOL,
-  runTypescriptParams,
-} from "./tools/run-typescript.js";
 import express from "express";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { MCPLogger } from "./mcp-logger.js";
@@ -53,10 +48,32 @@ const logger = new MCPLogger();
 // Register box resource, passing the logger instance
 mcpServer.resource("box", boxTemplate(logger), handleBoxResource(logger));
 
-// Register run-python prompt (doesn't use logger directly)
+const GBOX_MANUAL = "gbox-manual";
+const GBOX_MANUAL_DESCRIPTION = "A manual for the gbox command line tool.";
+const GBOX_MANUAL_CONTENT = `
+# GBox Manual
+
+## Overview
+Gbox is a set of tools that allows you to complete various tasks. All the tools are executed in a sandboxed environment. Gbox is developed by Gru AI.
+
+## Usage
+### run-python
+If you need to execute a standalone python script, you can use the run-python tool. 
+
+### run-bash
+If you need to execute a standalone bash script, you can use the run-bash tool. 
+
+### read-file
+If you need to read a file from the sandbox, you can use the read-file tool. 
+
+### write-file
+If you need to write a file to the sandbox, you can use the write-file tool. 
+`
+
+// Register gbox manual prompt
 mcpServer.prompt(
-  RUN_PYTHON_TOOL,
-  RUN_PYTHON_DESCRIPTION,
+  GBOX_MANUAL,
+  GBOX_MANUAL_DESCRIPTION,
   (_: RequestHandlerExtra) => {
     return {
       messages: [
@@ -64,11 +81,7 @@ mcpServer.prompt(
           role: "user",
           content: {
             type: "text",
-            text: `When running Python code in a sandbox, if you don't provide a boxId, the system will try to reuse an existing box with matching image. 
-              The system will first try to use a running box, then a stopped box (which will be started), and finally create a new one if needed. 
-              Note that without boxId, multiple calls may use different boxes even if they exist. 
-              If you need to ensure multiple calls use the same box, you must provide a boxId. 
-              You can use the 'list-boxes' tool to see available boxes.`,
+            text: GBOX_MANUAL_CONTENT
           },
         },
       ],
@@ -76,13 +89,15 @@ mcpServer.prompt(
   }
 );
 
-// Register tools, passing the logger instance
-mcpServer.tool(
-  LIST_BOXES_TOOL,
-  LIST_BOXES_DESCRIPTION,
-  {},
-  handleListBoxes(logger)
-);
+// Register tools
+
+// This is meaningless for now, because we don't have a way to explicitly create a box.
+// mcpServer.tool(
+//   LIST_BOXES_TOOL,
+//   LIST_BOXES_DESCRIPTION,
+//   {},
+//   handleListBoxes(log)
+// );
 
 mcpServer.tool(
   READ_FILE_TOOL,
@@ -92,17 +107,17 @@ mcpServer.tool(
 );
 
 mcpServer.tool(
+  WRITE_FILE_TOOL,
+  WRITE_FILE_DESCRIPTION,
+  writeFileParams,
+  handleWriteFile(logger)
+);
+
+mcpServer.tool(
   RUN_PYTHON_TOOL,
   RUN_PYTHON_DESCRIPTION,
   runPythonParams,
   handleRunPython(logger)
-);
-
-mcpServer.tool(
-  RUN_TYPESCRIPT_TOOL,
-  RUN_TYPESCRIPT_DESCRIPTION,
-  runTypescriptParams,
-  handleRunTypescript(logger)
 );
 
 mcpServer.tool(

@@ -137,21 +137,15 @@ export const handleReadFile = withLogging(
 
     logger.info(`Reading file: ${path}${boxId ? ` from box: ${boxId}` : ""}`);
 
-    // First check if file exists and get metadata
-    let metadata = await gbox.file.getFileMetadata(`${boxId}${path}`, signal);
-
-    // If file doesn't exist and we have a boxId, try to share it
-    if (!metadata && boxId) {
-      logger.info(`File not found, attempting to share from box: ${boxId}`);
-
-      // Share file from box
-      const shareResponse = await gbox.file.shareFile(path, boxId, signal);
+    // TODO: should check file meta, if file not changed, should not copy it
+    // Copy the file from sandbox to the share directory
+    const shareResponse = await gbox.file.shareFile(path, boxId, signal);
       if (!shareResponse || !shareResponse.success) {
         return {
           content: [
             {
               type: "text" as const,
-              text: shareResponse?.message || "Failed to share file",
+              text: shareResponse?.message || "Failed to read file",
             },
           ],
           isError: true,
@@ -162,13 +156,12 @@ export const handleReadFile = withLogging(
         `File shared successfully: ${
           shareResponse.message
         }\nShared files: ${shareResponse.fileList
-          .map((f) => f.path)
+          ?.map((f) => f.path)
           .join(", ")}`
       );
 
-      // Retry getting file metadata after sharing
-      metadata = await gbox.file.getFileMetadata(`${boxId}${path}`, signal);
-    }
+    // Get file metadata after sharing
+    const metadata = await gbox.file.getFileMetadata(`${boxId}${path}`, signal);
 
     if (!metadata) {
       return {

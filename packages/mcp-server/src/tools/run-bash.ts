@@ -55,6 +55,9 @@ export const handleRunBash = withLogging(
     );
 
     logger.info("Bash command executed successfully");
+    if (!result.stderr && !result.stdout) {
+      result.stdout = "[No output]";
+    }
     return {
       content: [
         {

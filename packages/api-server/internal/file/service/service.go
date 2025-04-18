@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/babelcloud/gbox/packages/api-server/config"
+	boxService "github.com/babelcloud/gbox/packages/api-server/internal/box/service"
 )
 
 const (
@@ -18,10 +19,11 @@ const (
 // FileService handles file operations for the share directory
 type FileService struct {
 	shareDir string
+	boxSvc   boxService.BoxService
 }
 
 // New creates a new Service
-func New() (*FileService, error) {
+func New(boxSvc boxService.BoxService) (*FileService, error) {
 	cfg := config.GetInstance()
 	shareDir := cfg.File.Share
 
@@ -34,6 +36,7 @@ func New() (*FileService, error) {
 
 	return &FileService{
 		shareDir: shareDir,
+		boxSvc:   boxSvc,
 	}, nil
 }
 

@@ -6,9 +6,11 @@ import type {
 } from "./types";
 import { Client } from "./client";
 
-interface FileShareRequest {
+interface FileOperationRequest {
   path: string;
   boxId: string;
+  content?: string;
+  operation: "share" | "write" | "reclaim";
 }
 
 export class FileService {
@@ -53,13 +55,13 @@ export class FileService {
     boxId: string,
     signal?: AbortSignal
   ): Promise<FileShareResponse | null> {
-    const request: FileShareRequest = {
+    const request: FileOperationRequest = {
       path,
       boxId,
+      operation: "share",
     };
 
     const response = await this.client.post("/files", {
-      params: { operation: "share" },
       body: JSON.stringify(request),
       signal,
     });
@@ -100,5 +102,31 @@ export class FileService {
   // Convert buffer to base64
   bufferToBase64(buffer: ArrayBuffer): string {
     return Buffer.from(buffer).toString("base64");
+  }
+
+  // Write file content
+  async writeFile(
+    boxId: string,
+    path: string,
+    content: string,
+    signal?: AbortSignal
+  ): Promise<FileShareResponse | null> {
+    const request: FileOperationRequest = {
+      path,
+      boxId,
+      content,
+      operation: "write",
+    };
+
+    const response = await this.client.post(`/files`, {
+      body: JSON.stringify(request),
+      signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to write file: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
   }
 }
