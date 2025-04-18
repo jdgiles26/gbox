@@ -15,6 +15,7 @@ endef
 
 # Image tags
 API_SERVER_TAG := $(call get_git_hash,packages/api-server)
+MCP_SERVER_TAG := $(call get_git_hash,packages/mcp-server)
 PY_IMG_TAG := $(call get_git_hash,images/python)
 TS_IMG_TAG := $(call get_git_hash,images/typescript)
 
@@ -74,16 +75,15 @@ dist-%: ## Create package for specific platform and architecture (e.g., dist-dar
 	rm -rf $$PLATFORM_DIR; \
 	mkdir -p $$PLATFORM_DIR/bin; \
 	mkdir -p $$PLATFORM_DIR/manifests; \
-	mkdir -p $$PLATFORM_DIR/packages/mcp-server; \
 	mkdir -p $$PLATFORM_DIR/packages/cli; \
 	mkdir -p $$PLATFORM_DIR/packages/cli/cmd/script; \
 	cp -r manifests/. $$PLATFORM_DIR/manifests/; \
-	rsync -a --exclude='node_modules' packages/mcp-server/ $$PLATFORM_DIR/packages/mcp-server/; \
 	cp packages/cli/gbox-$$PLATFORM_ARCH $$PLATFORM_DIR/packages/cli/gbox; \
 	cp -r packages/cli/cmd/script/. $$PLATFORM_DIR/packages/cli/cmd/script/; \
 	cp .env $$PLATFORM_DIR/ 2>/dev/null || true; \
 	cp LICENSE README.md $$PLATFORM_DIR/; \
 	$(call write_env,$$PLATFORM_DIR/manifests/docker,API_SERVER_IMG_TAG,$(API_SERVER_TAG)); \
+	$(call write_env,$$PLATFORM_DIR/manifests/docker,MCP_SERVER_IMG_TAG,$(MCP_SERVER_TAG)); \
 	$(call append_env,$$PLATFORM_DIR/manifests/docker,PREFIX,""); \
 	$(call write_env,$$PLATFORM_DIR/packages/mcp-server,PY_IMG_TAG,$(PY_IMG_TAG)); \
 	$(call append_env,$$PLATFORM_DIR/packages/mcp-server,TS_IMG_TAG,$(TS_IMG_TAG)); \

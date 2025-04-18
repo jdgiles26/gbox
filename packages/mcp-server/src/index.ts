@@ -1,5 +1,4 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { boxTemplate, handleBoxResource } from "./resources.js";
 import {
   RUN_PYTHON_TOOL,
@@ -19,11 +18,14 @@ import {
   handleWriteFile,
   writeFileParams,
 } from "./tools/index.js";
-import type { LoggingMessageNotification } from "@modelcontextprotocol/sdk/types.js";
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
-import type { LogFn } from "./types.js";
+import express from "express";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { MCPLogger } from "./mcp-logger.js";
 
-const enableLogging = true;
+let transport: SSEServerTransport | null = null;
+
+const app = express();
 
 // Create MCP server instance
 const mcpServer = new McpServer(
@@ -36,20 +38,15 @@ const mcpServer = new McpServer(
       prompts: {},
       resources: {},
       tools: {},
-      ...(enableLogging ? { logging: {} } : {}),
     },
   }
 );
-const log: LogFn = async (
-  params: LoggingMessageNotification["params"]
-): Promise<void> => {
-  if (enableLogging) {
-    await mcpServer.server.sendLoggingMessage(params);
-  }
-};
 
-// Register box resource
-mcpServer.resource("box", boxTemplate(log), handleBoxResource(log));
+// Create an instance of MCPLogger
+const logger = new MCPLogger();
+
+// Register box resource, passing the logger instance
+mcpServer.resource("box", boxTemplate(logger), handleBoxResource(logger));
 
 const GBOX_MANUAL = "gbox-manual";
 const GBOX_MANUAL_DESCRIPTION = "A manual for the gbox command line tool.";
@@ -106,35 +103,43 @@ mcpServer.tool(
   READ_FILE_TOOL,
   READ_FILE_DESCRIPTION,
   readFileParams,
-  handleReadFile(log)
+  handleReadFile(logger)
 );
 
 mcpServer.tool(
   WRITE_FILE_TOOL,
   WRITE_FILE_DESCRIPTION,
   writeFileParams,
-  handleWriteFile(log)
+  handleWriteFile(logger)
 );
 
 mcpServer.tool(
   RUN_PYTHON_TOOL,
   RUN_PYTHON_DESCRIPTION,
   runPythonParams,
-  handleRunPython(log)
+  handleRunPython(logger)
 );
 
 mcpServer.tool(
   RUN_BASH_TOOL,
   RUN_BASH_DESCRIPTION,
   runBashParams,
-  handleRunBash(log)
+  handleRunBash(logger)
 );
 
-// Start server
-const transport = new StdioServerTransport();
-await mcpServer.connect(transport);
-// Log successful startup
-log({
-  level: "info",
-  data: "Server started successfully",
+app.get("/sse", (req, res) => {
+  transport = new SSEServerTransport("/messages", res);
+  mcpServer.connect(transport);
+});
+
+app.post("/messages", (req, res) => {
+  if (transport) {
+    transport.handlePostMessage(req, res);
+  }
+});
+
+const port = process.env.PORT || 28090;
+
+app.listen(port, () => {
+  console.log(`Server started successfully on port ${port}`);
 });

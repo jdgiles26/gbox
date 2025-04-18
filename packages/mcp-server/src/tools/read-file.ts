@@ -1,8 +1,8 @@
 import { withLogging } from "../utils.js";
 import { config } from "../config.js";
 import { GBox, FILE_SIZE_LIMITS } from "../sdk/index.js";
-import { MCPLogger } from "../mcp-logger.js";
 import { z } from "zod";
+import type { Logger } from "../sdk/types";
 import type { FileStat } from "../sdk/types.js";
 
 export const READ_FILE_TOOL = "read-file";
@@ -28,7 +28,7 @@ async function handleFileContent(
   path: string,
   boxId: string,
   signal: AbortSignal,
-  logger: MCPLogger
+  logger: Logger
 ) {
   // For directories, return error
   if (fileStat.type === "directory") {
@@ -129,8 +129,7 @@ async function handleFileContent(
 
 // Read file handler
 export const handleReadFile = withLogging(
-  async (log, { path, boxId }, { signal }) => {
-    const logger = new MCPLogger(log);
+  async (logger: Logger, { path, boxId }, { signal }) => {
     const gbox = new GBox({
       apiUrl: config.apiServer.url,
       logger,

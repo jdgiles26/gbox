@@ -2,10 +2,12 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/babelcloud/gbox/packages/cli/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -45,66 +47,124 @@ func TestGetPackagesRootPath(t *testing.T) {
 	}
 }
 
-func TestMergeConfigs(t *testing.T) {
+func TestMergeAndMarshalConfigs(t *testing.T) {
 	// Create a temporary directory
 	tempDir, err := os.MkdirTemp("", "gbox-test-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	// Test case 1: Target file does not exist
-	nonExistentConfig := filepath.Join(tempDir, "non-existent.json")
+	// Define the new config structure to be merged
 	newConfig := McpConfig{
-		McpServers: map[string]struct {
-			Command string   `json:"command"`
-			Args    []string `json:"args"`
-		}{
-			"test": {
-				Command: "test-cmd",
-				Args:    []string{"arg1", "arg2"},
+		McpServers: map[string]McpServerEntry{
+			"gbox": {
+				Url: config.GetMcpServerUrl(), // Use the default URL from config for testing
 			},
 		},
 	}
-
-	result, err := mergeConfigs(nonExistentConfig, newConfig)
-	require.NoError(t, err)
-	assert.Equal(t, newConfig, result)
-
-	// Test case 2: Target file exists but is empty
-	emptyConfig := filepath.Join(tempDir, "empty.json")
-	err = os.WriteFile(emptyConfig, []byte{}, 0644)
+	newConfigJSON, err := json.MarshalIndent(newConfig, "", "  ")
 	require.NoError(t, err)
 
-	result, err = mergeConfigs(emptyConfig, newConfig)
+	// --- Test Case 1: Target file does not exist ---
+	nonExistentPath := filepath.Join(tempDir, "non-existent.json")
+	mergedJSON, err := mergeAndMarshalConfigs(nonExistentPath, newConfig)
 	require.NoError(t, err)
-	assert.Equal(t, newConfig, result)
+	assert.JSONEq(t, string(newConfigJSON), string(mergedJSON), "Merge into non-existent file")
 
-	// Test case 3: Target file exists with existing configuration
-	existingConfig := filepath.Join(tempDir, "existing.json")
-	existingData := McpConfig{
-		McpServers: map[string]struct {
-			Command string   `json:"command"`
-			Args    []string `json:"args"`
-		}{
-			"existing": {
-				Command: "existing-cmd",
-				Args:    []string{"arg1"},
-			},
+	// --- Test Case 2: Target file exists but is empty ---
+	emptyPath := filepath.Join(tempDir, "empty.json")
+	err = os.WriteFile(emptyPath, []byte{}, 0644)
+	require.NoError(t, err)
+	mergedJSON, err = mergeAndMarshalConfigs(emptyPath, newConfig)
+	require.NoError(t, err)
+	assert.JSONEq(t, string(newConfigJSON), string(mergedJSON), "Merge into empty file")
+
+	// --- Test Case 3: Target file exists with other entries (old format) ---
+	otherEntriesOldFormatPath := filepath.Join(tempDir, "other_old.json")
+	existingOldData := `{
+		"mcpServers": {
+			"other": {
+				"command": "old-cmd",
+				"args": ["old-arg"]
+			}
+		}
+	}`
+	err = os.WriteFile(otherEntriesOldFormatPath, []byte(existingOldData), 0644)
+	require.NoError(t, err)
+
+	mergedJSON, err = mergeAndMarshalConfigs(otherEntriesOldFormatPath, newConfig)
+	require.NoError(t, err)
+
+	// Expected result combines old and new entries
+	expectedCombinedOld := GenericMcpConfig{
+		McpServers: map[string]json.RawMessage{
+			"other": json.RawMessage(`{"command":"old-cmd","args":["old-arg"]}`),
+			"gbox":  json.RawMessage(fmt.Sprintf(`{"url":"%s"}`, config.GetMcpServerUrl())),
 		},
 	}
-	existingJson, err := json.Marshal(existingData)
-	require.NoError(t, err)
-	err = os.WriteFile(existingConfig, existingJson, 0644)
+	expectedCombinedOldJSON, _ := json.MarshalIndent(expectedCombinedOld, "", "  ")
+	assert.JSONEq(t, string(expectedCombinedOldJSON), string(mergedJSON), "Merge with existing old format entry")
+
+	// --- Test Case 4: Target file exists with other entries (new format) ---
+	otherEntriesNewFormatPath := filepath.Join(tempDir, "other_new.json")
+	existingNewData := `{
+		"mcpServers": {
+			"another": {
+				"url": "http://service:5678"
+			}
+		}
+	}`
+	err = os.WriteFile(otherEntriesNewFormatPath, []byte(existingNewData), 0644)
 	require.NoError(t, err)
 
-	result, err = mergeConfigs(existingConfig, newConfig)
+	mergedJSON, err = mergeAndMarshalConfigs(otherEntriesNewFormatPath, newConfig)
 	require.NoError(t, err)
 
-	// Verify both configurations exist in the result
-	assert.Equal(t, 2, len(result.McpServers))
-	assert.Contains(t, result.McpServers, "existing")
-	assert.Contains(t, result.McpServers, "test")
-	assert.Equal(t, "existing-cmd", result.McpServers["existing"].Command)
-	assert.Equal(t, "test-cmd", result.McpServers["test"].Command)
+	// Expected result combines existing and new entries
+	expectedCombinedNew := GenericMcpConfig{
+		McpServers: map[string]json.RawMessage{
+			"another": json.RawMessage(`{"url":"http://service:5678"}`),
+			"gbox":    json.RawMessage(fmt.Sprintf(`{"url":"%s"}`, config.GetMcpServerUrl())),
+		},
+	}
+	expectedCombinedNewJSON, _ := json.MarshalIndent(expectedCombinedNew, "", "  ")
+	assert.JSONEq(t, string(expectedCombinedNewJSON), string(mergedJSON), "Merge with existing new format entry")
+
+	// --- Test Case 5: Target file exists with the *same* entry key ("gbox") ---
+	sameEntryPath := filepath.Join(tempDir, "same_entry.json")
+	existingSameKeyData := `{
+		"mcpServers": {
+			"gbox": {
+				"url": "http://old-gbox-url:9999"
+			},
+			"other": {
+				"url": "http://other-service"
+			}
+		}
+	}`
+	err = os.WriteFile(sameEntryPath, []byte(existingSameKeyData), 0644)
+	require.NoError(t, err)
+
+	mergedJSON, err = mergeAndMarshalConfigs(sameEntryPath, newConfig)
+	require.NoError(t, err)
+
+	// Expected result updates "gbox" and keeps "other"
+	expectedUpdated := GenericMcpConfig{
+		McpServers: map[string]json.RawMessage{
+			"other": json.RawMessage(`{"url":"http://other-service"}`),
+			"gbox":  json.RawMessage(fmt.Sprintf(`{"url":"%s"}`, config.GetMcpServerUrl())), // Updated URL from config
+		},
+	}
+	expectedUpdatedJSON, _ := json.MarshalIndent(expectedUpdated, "", "  ")
+	assert.JSONEq(t, string(expectedUpdatedJSON), string(mergedJSON), "Merge should update existing gbox entry")
+
+	// --- Test Case 6: Target file contains invalid JSON ---
+	invalidJSONPath := filepath.Join(tempDir, "invalid.json")
+	err = os.WriteFile(invalidJSONPath, []byte(`{ "mcpServers": { "key": "value }`), 0644) // Missing closing brace
+	require.NoError(t, err)
+
+	_, err = mergeAndMarshalConfigs(invalidJSONPath, newConfig)
+	require.Error(t, err) // Expect an error because merging cannot be done safely
+	assert.Contains(t, err.Error(), "invalid JSON", "Error message should indicate invalid JSON")
 }
 
 func TestNewMcpExportCommand(t *testing.T) {
@@ -112,7 +172,7 @@ func TestNewMcpExportCommand(t *testing.T) {
 
 	// Verify command basic properties
 	assert.Equal(t, "export", cmd.Use)
-	assert.Equal(t, "Export MCP configuration for Claude Desktop", cmd.Short)
+	assert.Equal(t, "Export MCP configuration for Claude Desktop/Cursor", cmd.Short)
 
 	// Verify flag options
 	mergeTo, err := cmd.Flags().GetString("merge-to")

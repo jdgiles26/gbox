@@ -1,8 +1,8 @@
 import { withLogging } from "../utils.js";
 import { config } from "../config.js";
 import { GBox } from "../sdk/index.js";
-import { MCPLogger } from "../mcp-logger.js";
 import { z } from "zod";
+import type { Logger } from "../sdk/types";
 
 export const RUN_BASH_TOOL = "run-bash";
 export const RUN_BASH_DESCRIPTION = `Run Bash commands in a sandbox. 
@@ -24,8 +24,7 @@ export const runBashParams = {
 };
 
 export const handleRunBash = withLogging(
-  async (log, { boxId, code }, { signal, sessionId }) => {
-    const logger = new MCPLogger(log);
+  async (logger: Logger, { boxId, code }, { signal, sessionId }) => {
     const gbox = new GBox({
       apiUrl: config.apiServer.url,
       logger,
@@ -55,7 +54,7 @@ export const handleRunBash = withLogging(
       { signal, sessionId }
     );
 
-    log({ level: "info", data: "Bash command executed successfully" });
+    logger.info("Bash command executed successfully");
     if (!result.stderr && !result.stdout) {
       result.stdout = "[No output]";
     }
