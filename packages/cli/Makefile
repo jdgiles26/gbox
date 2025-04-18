@@ -45,7 +45,7 @@ e2e-setup: ## Setup e2e test environment (build and start test API server)
 	@echo "Starting e2e test API server..."
 	@SERVICE_PORT=28081 \
 	 PREFIX=test \
-	 docker compose -f ../../manifests/docker/docker-compose.yml up -d --build
+	 docker compose -f ../../manifests/docker/docker-compose.yml up -d --build api-server
 	@echo "Waiting for e2e test API server to be ready..."
 	@for i in $$(seq 1 30); do \
 		if curl -s http://localhost:28081/api/v1/boxes > /dev/null; then \
@@ -106,7 +106,7 @@ e2e-cleanup: ## Clean up e2e test environment and stop test API server
 	@echo "Cleaning up e2e test environment..."
 	@PREFIX=test \
 	 SERVICE_PORT=28081 \
-	 docker compose -f ../../manifests/docker/docker-compose.yml down
+	 docker compose -f ../../manifests/docker/docker-compose.yml down api-server
 	@echo "E2E test environment cleaned up"
 
 # Add this to prevent make from trying to build the arguments

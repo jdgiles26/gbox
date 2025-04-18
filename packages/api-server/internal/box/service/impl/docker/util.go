@@ -266,7 +266,7 @@ func WaitForResponse(reader io.Reader) ([]byte, error) {
 			return nil, err
 		}
 		if response.Error != "" {
-			return nil, fmt.Errorf(response.Error)
+			return nil, fmt.Errorf("%s", response.Error)
 		}
 		buf = append(buf, []byte(response.Status+"\n")...)
 	}

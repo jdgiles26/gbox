@@ -13,8 +13,8 @@ import (
 	"github.com/docker/docker/api/types/mount"
 
 	"github.com/babelcloud/gbox/packages/api-server/config"
-	"github.com/babelcloud/gbox/packages/api-server/pkg/box"
 	"github.com/babelcloud/gbox/packages/api-server/internal/common"
+	model "github.com/babelcloud/gbox/packages/api-server/pkg/box"
 	"github.com/babelcloud/gbox/packages/api-server/pkg/id"
 )
 
@@ -65,7 +65,7 @@ func (s *Service) Create(ctx context.Context, params *model.BoxCreateParams) (*m
 	// Add default mounts
 	mounts = append(mounts, mount.Mount{
 		Type:   mount.TypeBind,
-		Source: filepath.Join(config.GetInstance().File.Share, boxID),
+		Source: filepath.Join(config.GetInstance().File.HostShare, boxID),
 		Target: common.DefaultShareDirPath,
 	})
 

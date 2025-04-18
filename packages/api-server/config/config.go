@@ -34,9 +34,9 @@ type ServerConfig struct {
 
 // FileConfig represents file service configuration
 type FileConfig struct {
-	Home      string
-	Share     string
-	HostShare string
+	Home      string `mapstructure:"home"`
+	Share     string `mapstructure:"share"`
+	HostShare string `mapstructure:"host_share"`
 }
 
 // ClusterConfig represents cluster configuration
@@ -240,8 +240,8 @@ func New() (*Config, error) {
 		},
 		File: FileConfig{
 			Home:      filepath.Join(os.Getenv("HOME"), ".gbox"),
-			Share:     filepath.Join(os.Getenv("HOME"), ".gbox", "share"),
-			HostShare: filepath.Join(os.Getenv("HOME"), ".gbox", "share"),
+			Share:     filepath.Join(os.Getenv("HOME"), ".gbox", "share"), // Default based on container's HOME
+			HostShare: filepath.Join(os.Getenv("HOME"), ".gbox", "share"), // Default based on container's HOME
 		},
 		Cluster: ClusterConfig{
 			Mode:                   "docker",
