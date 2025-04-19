@@ -59,6 +59,7 @@ jobs:
         run: |
           cd packages/mcp-server
           pnpm install
+          pnpm build
 
       - name: Build and create distribution
         run: make dist VERSION=${{ env.VERSION }}
