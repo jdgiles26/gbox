@@ -227,14 +227,21 @@ func runExec(opts *BoxExecOptions) error {
 		if err := json.Unmarshal(body, &errorData); err == nil {
 			if message, ok := errorData["message"].(string); ok {
 				errMsg = message
-			} else {
-				errMsg = fmt.Sprintf("Server returned status code %d", resp.StatusCode)
 			}
-		} else {
-			errMsg = fmt.Sprintf("Server returned status code %d: %s", resp.StatusCode, string(body))
 		}
 
-		return fmt.Errorf("%s", errMsg)
+		// If errMsg is still empty after trying JSON, use the raw body
+		if errMsg == "" {
+			errMsg = string(body)
+		}
+
+		// Provide a specific hint for 409 Conflict (BoxNotRunning)
+		if resp.StatusCode == http.StatusConflict {
+			return fmt.Errorf("%s (status %d). Maybe run 'gbox box start %s'?", errMsg, resp.StatusCode, opts.BoxID)
+		} else {
+			// General error message for other statuses
+			return fmt.Errorf("%s (status %d)", errMsg, resp.StatusCode)
+		}
 	}
 
 	// Get hijacked connection

@@ -49,6 +49,18 @@ func ClientInfo() map[string]string {
 	}
 }
 
+// serverInfoResponse defines the structure expected from the API server's version endpoint
+type serverInfoResponse struct {
+	Version       string `json:"version"`
+	APIVersion    string `json:"apiVersion"`
+	GoVersion     string `json:"goVersion"`
+	GitCommit     string `json:"gitCommit"`
+	BuildTime     string `json:"buildTime"`
+	FormattedTime string `json:"formattedTime"`
+	OS            string `json:"os"`
+	Arch          string `json:"arch"`
+}
+
 // GetServerInfo retrieves version information from the API server
 func GetServerInfo() (map[string]string, error) {
 	apiURL := config.GetAPIURL()
@@ -61,7 +73,13 @@ func GetServerInfo() (map[string]string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API server returned status: %s", resp.Status)
+		// Try to read body for more details even on error
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		errorMsg := fmt.Sprintf("API server returned status: %s", resp.Status)
+		if len(bodyBytes) > 0 {
+			errorMsg = fmt.Sprintf("%s, body: %s", errorMsg, string(bodyBytes))
+		}
+		return nil, fmt.Errorf("%s", errorMsg)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -69,10 +87,22 @@ func GetServerInfo() (map[string]string, error) {
 		return nil, fmt.Errorf("failed to read response from API server: %v", err)
 	}
 
-	var serverInfo map[string]string
-	if err := json.Unmarshal(body, &serverInfo); err != nil {
-		return nil, fmt.Errorf("failed to parse server version information: %v", err)
+	var respData serverInfoResponse
+	if err := json.Unmarshal(body, &respData); err != nil {
+		return nil, fmt.Errorf("failed to parse server version information (body: %s): %v", string(body), err)
 	}
 
-	return serverInfo, nil
+	// Convert struct to map with PascalCase keys for consistency
+	serverInfoMap := map[string]string{
+		"Version":       respData.Version,
+		"APIVersion":    respData.APIVersion,
+		"GoVersion":     respData.GoVersion,
+		"GitCommit":     respData.GitCommit,
+		"BuildTime":     respData.BuildTime,
+		"FormattedTime": respData.FormattedTime,
+		"OS":            respData.OS,
+		"Arch":          respData.Arch,
+	}
+
+	return serverInfoMap, nil
 }

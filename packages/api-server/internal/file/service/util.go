@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/babelcloud/gbox/packages/api-server/pkg/file"
+	model "github.com/babelcloud/gbox/packages/api-server/pkg/file"
 	"github.com/babelcloud/gbox/packages/api-server/pkg/logger"
 	"github.com/gabriel-vasile/mimetype"
 )

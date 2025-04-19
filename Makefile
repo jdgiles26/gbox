@@ -48,8 +48,6 @@ build: check-pnpm ## Build all components
 	@echo "Building Go binary for all platforms..."
 	@$(MAKE) -C packages/cli binary-all
 	# Binaries are kept in packages/cli/build/
-	@echo "Building mcp-server..."
-	@cd packages/mcp-server && pnpm install && pnpm build
 	@echo "Build completed"
 
 # Build docker images
@@ -83,10 +81,10 @@ dist-%: ## Create package for specific platform and architecture (e.g., dist-dar
 	cp .env $$PLATFORM_DIR/ 2>/dev/null || true; \
 	cp LICENSE README.md $$PLATFORM_DIR/; \
 	$(call write_env,$$PLATFORM_DIR/manifests/docker,API_SERVER_IMG_TAG,$(API_SERVER_TAG)); \
-	$(call write_env,$$PLATFORM_DIR/manifests/docker,MCP_SERVER_IMG_TAG,$(MCP_SERVER_TAG)); \
+	$(call append_env,$$PLATFORM_DIR/manifests/docker,MCP_SERVER_IMG_TAG,$(MCP_SERVER_TAG)); \
 	$(call append_env,$$PLATFORM_DIR/manifests/docker,PREFIX,""); \
-	$(call write_env,$$PLATFORM_DIR/packages/mcp-server,PY_IMG_TAG,$(PY_IMG_TAG)); \
-	$(call append_env,$$PLATFORM_DIR/packages/mcp-server,TS_IMG_TAG,$(TS_IMG_TAG)); \
+	$(call append_env,$$PLATFORM_DIR/manifests/docker,PY_IMG_TAG,$(PY_IMG_TAG)); \
+	$(call append_env,$$PLATFORM_DIR/manifests/docker,TS_IMG_TAG,$(TS_IMG_TAG)); \
 	if [ -f "packages/cli/gbox-$$PLATFORM_ARCH" ]; then \
 		ln -sf ../packages/cli/gbox $$PLATFORM_DIR/bin/gbox; \
 		cp bin/* $$PLATFORM_DIR/bin/ 2>/dev/null || true; \

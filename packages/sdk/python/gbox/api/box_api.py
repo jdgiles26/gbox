@@ -71,6 +71,12 @@ class BoxApi:
                 params["filter"] = filter_params
 
         response = self.client.get("/api/v1/boxes", params=params)
+        print(response)
+        # Convert extra_labels back to labels in the response for SDK consistency
+        if isinstance(response, dict) and "boxes" in response and isinstance(response["boxes"], list):
+            for box_data in response["boxes"]:
+                if isinstance(box_data, dict) and "extra_labels" in box_data:
+                    box_data["labels"] = box_data.pop("extra_labels")
         return response
 
     def get(self, box_id: str) -> Dict[str, Any]:
@@ -91,6 +97,9 @@ class BoxApi:
             }
         """
         response = self.client.get(f"/api/v1/boxes/{box_id}")
+        # Convert extra_labels back to labels in the response for SDK consistency
+        if isinstance(response, dict) and "extra_labels" in response:
+            response["labels"] = response.pop("extra_labels")
         return response
 
     def create(
@@ -148,11 +157,14 @@ class BoxApi:
         if working_dir:
             data["workingDir"] = working_dir
         if labels:
-            data["labels"] = labels
+            data["extra_labels"] = labels
         if volumes:
             data["volumes"] = volumes
 
         response = self.client.post("/api/v1/boxes", data=data)
+        # Convert extra_labels back to labels in the response for SDK consistency
+        if isinstance(response, dict) and "extra_labels" in response:
+            response["labels"] = response.pop("extra_labels")
         return response
 
     def delete(self, box_id: str, force: bool = False) -> Dict[str, Any]:

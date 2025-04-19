@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/babelcloud/gbox/packages/api-server/pkg/box"
 	"github.com/babelcloud/gbox/packages/api-server/internal/box/service"
+	model "github.com/babelcloud/gbox/packages/api-server/pkg/box"
 	"github.com/babelcloud/gbox/packages/api-server/pkg/logger"
 
 	"github.com/emicklei/go-restful/v3"
@@ -166,6 +166,26 @@ func (h *BoxHandler) ReclaimBoxes(req *restful.Request, resp *restful.Response) 
 // ExecBox executes a command in a box
 func (h *BoxHandler) ExecBox(req *restful.Request, resp *restful.Response) {
 	boxID := req.PathParameter("id")
+
+	// Get Box status first
+	box, err := h.service.Get(req.Request.Context(), boxID)
+	if err != nil {
+		if err == service.ErrBoxNotFound {
+			writeError(resp, http.StatusNotFound, "BoxNotFound", err.Error())
+			return
+		}
+		writeError(resp, http.StatusInternalServerError, "GetBoxError", fmt.Sprintf("Failed to get box status: %v", err))
+		return
+	}
+
+	// Check if the box is running
+	if box.Status != "running" {
+		// Log specifically that we are entering this block before writing the error
+		log.Warnf("ExecBox: Box %s is not running (state: %s). Returning 409 Conflict.", boxID, box.Status)
+		writeError(resp, http.StatusConflict, "BoxNotRunning", fmt.Sprintf("Box %s is not running (state: %s), please start it first", boxID, box.Status))
+		return
+	}
+
 	// Read request body directly into model.BoxExecParams
 	var execReq model.BoxExecParams
 	if err := req.ReadEntity(&execReq); err != nil {
@@ -322,12 +342,15 @@ func (h *BoxHandler) GetArchive(req *restful.Request, resp *restful.Response) {
 	// Set response headers
 	resp.Header().Set("Content-Type", "application/x-tar")
 	resp.Header().Set("X-Gbox-Path-Stat", string(statJSON))
-	resp.Header().Set("Content-Length", fmt.Sprintf("%d", archiveResp.Size))
 	resp.Header().Set("Last-Modified", archiveResp.Mtime)
 
 	// Copy the archive to response
-	if _, err := io.Copy(resp.ResponseWriter, archive); err != nil {
-		writeError(resp, http.StatusInternalServerError, "GetArchiveError", fmt.Sprintf("Failed to copy archive: %v", err))
+	_, err = io.Copy(resp.ResponseWriter, archive)
+
+	if err != nil {
+		// Log the error, but don't try to writeError as headers might have been sent
+		log.Errorf("Failed to copy archive to response for box %s, path %s: %v", boxID, path, err)
+		// writeError(resp, http.StatusInternalServerError, "GetArchiveError", fmt.Sprintf("Failed to copy archive: %v", err))
 		return
 	}
 }
@@ -386,6 +409,7 @@ func (h *BoxHandler) ExtractArchive(req *restful.Request, resp *restful.Response
 			writeError(resp, http.StatusNotFound, "BoxNotFound", err.Error())
 			return
 		}
+		// Log the specific error before returning 500
 		writeError(resp, http.StatusInternalServerError, "ExtractArchiveError", err.Error())
 		return
 	}
@@ -410,7 +434,7 @@ func writeResponseHeaders(w io.Writer, upgrade, connection string, tty bool) {
 		log.Debugf("Protocol upgrade requested, using %s", getStreamType(tty)) // Use local helper
 	} else {
 		fmt.Fprintf(w, "HTTP/1.1 200 OK\r\n")
-		fmt.Fprintf(w, "Content-Type: %s\r\n", getContentType(tty))                  // Use local helper
+		fmt.Fprintf(w, "Content-Type: %s\r\n", getContentType(tty))               // Use local helper
 		log.Debugf("No protocol upgrade requested, using %s", getStreamType(tty)) // Use local helper
 	}
 	fmt.Fprintf(w, "\r\n")

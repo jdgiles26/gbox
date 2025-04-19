@@ -103,8 +103,7 @@ class FileApi:
                 "errors": ["error message if any"]
             }
         """
-        params = {"operation": "reclaim"}
-        response = self.client.post("/api/v1/files", params=params)
+        response = self.client.post("/api/v1/files", data={"operation": "reclaim"})
         return response
 
     def share(self, box_id: str, path: str) -> Dict[str, Any]:
@@ -132,10 +131,10 @@ class FileApi:
                 ]
             }
         """
-        params = {"operation": "share"}
-        # Ensure path starts with /
         if not path.startswith("/"):
             path = "/" + path
-        data = {"boxId": box_id, "path": path}
-        response = self.client.post("/api/v1/files", params=params, data=data)
+        # Add operation to request body
+        data = {"boxId": box_id, "path": path, "operation": "share"}
+        # Call post without params, but with operation in data
+        response = self.client.post("/api/v1/files", data=data)
         return response

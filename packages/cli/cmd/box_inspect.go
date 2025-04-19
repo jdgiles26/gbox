@@ -73,7 +73,7 @@ func handleInspectResponse(statusCode int, body []byte, boxID, outputFormat stri
 	case 200:
 		if outputFormat == "json" {
 			// Output JSON directly
-			fmt.Println(string(body))
+			fmt.Printf("%s\n", string(body))
 		} else {
 			// Output in text format
 			fmt.Println("Box details:")
@@ -85,23 +85,23 @@ func handleInspectResponse(statusCode int, body []byte, boxID, outputFormat stri
 				return fmt.Errorf("failed to parse JSON response: %v", err)
 			}
 
-			// Output each key-value pair
-			for key, value := range data {
-				// Handle complex types
-				var valueStr string
-				switch v := value.(type) {
-				case string, float64, bool, int:
-					valueStr = fmt.Sprintf("%v", v)
-				default:
-					// For objects or arrays, use JSON format
-					jsonBytes, err := json.Marshal(v)
-					if err != nil {
-						valueStr = fmt.Sprintf("%v", v)
-					} else {
-						valueStr = string(jsonBytes)
-					}
+			// Define the desired order of keys
+			orderedKeys := []string{"id", "image", "status", "created_at", "extra_labels"}
+			printedKeys := make(map[string]bool)
+
+			// Print keys in the desired order
+			for _, key := range orderedKeys {
+				if value, exists := data[key]; exists {
+					printKeyValue(key, value, outputFormat) // Use a helper function for printing
+					printedKeys[key] = true
 				}
-				fmt.Printf("%-15s: %s\n", key, valueStr)
+			}
+
+			// Print any remaining keys (that were not in the ordered list)
+			for key, value := range data {
+				if !printedKeys[key] {
+					printKeyValue(key, value, outputFormat) // Use the same helper function
+				}
 			}
 		}
 	case 404:
@@ -115,4 +115,52 @@ func handleInspectResponse(statusCode int, body []byte, boxID, outputFormat stri
 	}
 
 	return nil
+}
+
+// Helper function to print key-value pairs with special formatting for extra_labels
+func printKeyValue(key string, value interface{}, outputFormat string) {
+	// Special handling for extra_labels when output is text
+	if key == "extra_labels" && outputFormat == "text" {
+		if labelsMap, ok := value.(map[string]interface{}); ok {
+			fmt.Printf("%-15s:", key)
+			if len(labelsMap) > 0 {
+				// Need to sort the labels for consistent output within extra_labels as well
+				labelKeys := make([]string, 0, len(labelsMap))
+				for k := range labelsMap {
+					labelKeys = append(labelKeys, k)
+				}
+				// sort.Strings(labelKeys) // Requires importing "sort"
+				// Iterate and print labels with the new format
+				for i, labelKey := range labelKeys { // Iterate using sorted keys if sort was imported
+					labelValue := labelsMap[labelKey]
+					if i == 0 {
+						// Print first label on the same line
+						fmt.Printf(" %s: %v\n", labelKey, labelValue)
+					} else {
+						// Print subsequent labels on new lines, aligned
+						fmt.Printf("%-15s  %s: %v\n", "", labelKey, labelValue)
+					}
+				}
+			} else {
+				fmt.Println() // Still print a newline even if empty, for consistent spacing
+			}
+			return // Handled extra_labels, exit function for this key
+		}
+	}
+
+	// Default handling for other keys
+	var valueStr string
+	switch v := value.(type) {
+	case string, float64, bool, int, nil:
+		valueStr = fmt.Sprintf("%v", v)
+	default:
+		// For complex types (maps, slices, etc.) other than handled extra_labels, use JSON format
+		jsonBytes, err := json.Marshal(v)
+		if err != nil {
+			valueStr = fmt.Sprintf("%v (error marshaling: %v)", v, err)
+		} else {
+			valueStr = string(jsonBytes)
+		}
+	}
+	fmt.Printf("%-15s: %s\n", key, valueStr)
 }
