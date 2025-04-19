@@ -305,7 +305,7 @@ func copyFromStdinToBox(boxPath *BoxPath, apiURL string, debug func(string)) err
 	return nil
 }
 
-func copyFromFileToBox(src string, boxPath *BoxPath, apiURL string, debug func(string)) error {
+func copyFromFileToBox(src string, boxPath *BoxPath, apiURL string, _ func(string)) error {
 	// Convert local path to absolute path
 	src = getAbsolutePath(src)
 

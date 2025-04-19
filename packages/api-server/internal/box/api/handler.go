@@ -166,34 +166,32 @@ func (h *BoxHandler) ReclaimBoxes(req *restful.Request, resp *restful.Response) 
 // ExecBox executes a command in a box
 func (h *BoxHandler) ExecBox(req *restful.Request, resp *restful.Response) {
 	boxID := req.PathParameter("id")
+
+	// Get Box status first
+	box, err := h.service.Get(req.Request.Context(), boxID)
+	if err != nil {
+		if err == service.ErrBoxNotFound {
+			writeError(resp, http.StatusNotFound, "BoxNotFound", err.Error())
+			return
+		}
+		writeError(resp, http.StatusInternalServerError, "GetBoxError", fmt.Sprintf("Failed to get box status: %v", err))
+		return
+	}
+
+	// Check if the box is running
+	if box.Status != "running" {
+		// Log specifically that we are entering this block before writing the error
+		log.Warnf("ExecBox: Box %s is not running (state: %s). Returning 409 Conflict.", boxID, box.Status)
+		writeError(resp, http.StatusConflict, "BoxNotRunning", fmt.Sprintf("Box %s is not running (state: %s), please start it first", boxID, box.Status))
+		return
+	}
+
 	// Read request body directly into model.BoxExecParams
 	var execReq model.BoxExecParams
 	if err := req.ReadEntity(&execReq); err != nil {
 		writeError(resp, http.StatusBadRequest, "InvalidRequest", err.Error())
 		return
 	}
-
-	// --- Pre-check box status BEFORE hijacking ---
-	boxInfo, err := h.service.Get(req.Request.Context(), boxID)
-	if err != nil {
-		if err == service.ErrBoxNotFound {
-			writeError(resp, http.StatusNotFound, "BoxNotFound", fmt.Sprintf("Box with ID '%s' not found", boxID))
-			return
-		}
-		// Other unexpected error during Get
-		log.Errorf("Error getting box info before exec for box %s: %v", boxID, err)
-		writeError(resp, http.StatusInternalServerError, "GetBoxError", fmt.Sprintf("Failed to get box info: %v", err))
-		return
-	}
-
-	// Check if the box is actually running (status might vary based on implementation)
-	// Assuming common statuses like "running" or "active"
-	if boxInfo.Status != "running" && boxInfo.Status != "active" { // Adjust expected statuses if needed
-		log.Warnf("Attempted to exec on non-running box %s (status: %s)", boxID, boxInfo.Status)
-		writeError(resp, http.StatusConflict, "BoxNotRunning", fmt.Sprintf("Box '%s' is not running (status: %s)", boxID, boxInfo.Status))
-		return
-	}
-	// --- End Pre-check ---
 
 	// Check if we need to hijack the connection
 	upgrade := req.HeaderParameter("Upgrade")

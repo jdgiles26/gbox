@@ -15,7 +15,7 @@ func init() {
 	// Set default values
 	v.SetDefault("api.endpoint", "http://localhost:28080")
 	v.SetDefault("project.root", "")
-	v.SetDefault("mcp.server.url", "http://localhost:28090    pengyop peng/sse") // Default MCP server URL
+	v.SetDefault("mcp.server.url", "http://localhost:28090/sse") // Default MCP server URL
 
 	// Environment variables
 	v.AutomaticEnv()
