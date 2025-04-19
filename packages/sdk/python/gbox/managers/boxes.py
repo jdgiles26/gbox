@@ -126,7 +126,7 @@ class BoxManager:
                 f"Unexpected error processing create response: {e}", explanation=str(raw_response)
             ) from e
 
-    def delete_all(self, force: bool = False) -> BoxesDeleteResponse:
+    def delete_all(self, force: bool = True) -> BoxesDeleteResponse:
         """
         Deletes all Boxes managed by the service and validates the response.
 

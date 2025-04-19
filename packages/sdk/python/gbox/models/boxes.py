@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 # Add Pydantic imports
 from pydantic import BaseModel, Field, field_validator
 
+from ..exceptions import APIError
+
 if TYPE_CHECKING:
     from ..client import GBoxClient  # Avoid circular import for type hints
 
@@ -196,14 +198,35 @@ class Box:
         Args:
             force: If True, force deletion even if running (if API supports).
         Raises:
-            APIError: If the API call fails.
+            APIError: If the API call fails for reasons other than trying to
+                      delete a running box without force=True.
             ValidationError: If the API response for delete is invalid.
         """
-        response_data = self._client.box_api.delete(self.id, force=force)
-        # Optionally validate the delete response
-        BoxDeleteResponse.model_validate(response_data)
-        # After deletion, this object is effectively stale. Mark it?
-        # self.attrs.status = 'deleted' # Or similar
+        logger = logging.getLogger(__name__)
+        try:
+            response_data = self._client.box_api.delete(self.id, force=force)
+            # Optionally validate the delete response
+            BoxDeleteResponse.model_validate(response_data)
+            # After deletion, this object is effectively stale. Mark it?
+            # self.attrs.status = 'deleted' # Or similar
+        except APIError as e:
+            # Check if the error is due to trying to delete a running container without force
+            # This requires inspecting the error details, which might vary.
+            # We'll assume the status code and a specific message substring indicate this.
+            # You might need to adjust the condition based on the exact APIError structure.
+            is_running_error = (
+                "container is running" in str(e).lower()
+                or "failed to remove container" in str(e).lower()
+            )
+
+            if not force and is_running_error:
+                logger.warning(
+                    f"Warning: Box '{self.id}' is likely running and cannot be deleted "
+                )
+                # Do not raise the error, just log the warning.
+            else:
+                # Re-raise the error if force=True or it's a different error
+                raise e
 
     def run(self, command: List[str]) -> Tuple[int, Optional[str], Optional[str]]:
         """
@@ -219,9 +242,7 @@ class Box:
             APIError: If the API call fails.
             ValidationError: If the API response is invalid.
         """
-        logger = logging.getLogger(__name__)
         raw_response = self._client.box_api.run(self.id, command=command)
-        logger.debug(f"Raw API response from BoxApi.run for Box {self.id}: {raw_response}")
         # Validate the response
         validated_response = BoxRunResponse.model_validate(raw_response)
 
