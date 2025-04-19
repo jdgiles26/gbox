@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging  # Add logging
 from typing import TYPE_CHECKING, Any, Dict, Union
+import os
 
 # Import Pydantic models and validation error
 from pydantic import ValidationError
@@ -105,6 +106,7 @@ class FileManager:
         try:
             # Use the service layer method, which might raise NotFound
             attrs = self._service.head(path)
+            print(attrs)
             # If head succeeds and returns something, it exists
             return attrs is not None
         except NotFound:
@@ -169,22 +171,20 @@ class FileManager:
             # The FileStat model already performed alias mapping for modTime
             shared_file_stat = validated_response.file_list[0]
 
-            # The path in the shared volume is typically in the FileStat
-            shared_file_path = shared_file_stat.path
+            # --- Path Reconstruction ---
+            # The path from the API response (shared_file_stat.path) might be incorrect (e.g., absolute host path).
+            # We need to reconstruct the expected path relative to the share root based on convention.
+            # Assuming the convention is /{box_id}/{original_filename_in_box}
+            original_filename = os.path.basename(box_path) # Get filename from the original box_path parameter
+            # Construct the expected path in the shared volume
+            shared_file_path = f"/{box_id}/{original_filename}"
+            # Ensure leading slash (though f-string should handle it)
+            if not shared_file_path.startswith("/"):
+                 shared_file_path = "/" + shared_file_path
 
-            # --- Restore check for potentially invalid path from response ---
-            if not shared_file_path or shared_file_path == "/":
-                logger.warning(
-                    f"FileStat path from share response for {shared_file_stat.name} is missing or invalid ('{shared_file_path}'). "
-                    f"Attempting to construct path as /{box_id}/{shared_file_stat.name}"
-                )
-                # Construct path based on typical sharing conventions if path from API is missing/invalid
-                shared_file_path = f"/{box_id}/{shared_file_stat.name}"
-                if not shared_file_path.startswith("/"):
-                    shared_file_path = "/" + shared_file_path  # Ensure leading slash
+            logger.info(f"Reconstructed shared file path: {shared_file_path} (original from API: {shared_file_stat.path})")
 
-            # Use self.get which handles validation of the final FileStat
-            # This ensures the (potentially constructed) path is valid and accessible.
+            # Use self.get with the *reconstructed* path
             return self.get(shared_file_path)
 
         except ValidationError as e:
