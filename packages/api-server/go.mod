@@ -3,6 +3,7 @@ module github.com/babelcloud/gbox/packages/api-server
 go 1.23.7
 
 require (
+	github.com/JohannesKaufmann/html-to-markdown v1.6.0
 	github.com/docker/docker v25.0.6+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/emicklei/go-restful/v3 v3.12.2
@@ -21,7 +22,6 @@ require (
 )
 
 require (
-	github.com/JohannesKaufmann/html-to-markdown v1.6.0 // indirect
 	github.com/Microsoft/go-winio v0.4.14 // indirect
 	github.com/PuerkitoBio/goquery v1.9.2 // indirect
 	github.com/andybalholm/cascadia v1.3.2 // indirect
