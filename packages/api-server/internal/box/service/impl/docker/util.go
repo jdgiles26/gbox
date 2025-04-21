@@ -250,15 +250,27 @@ func GetEnvVars(env map[string]string) []string {
 	return vars
 }
 
-// GetImage returns the image name with default tag if not specified
 func GetImage(image string) string {
+	// 1. Handle empty input: default to Python image
 	if image == "" {
-		return "babelcloud/gbox-python:latest"
+		pythonTag := config.GetPythonImageTag()
+		// Ensure default python image also gets a tag if GetPythonImageTag returns empty
+		if pythonTag == "" {
+			pythonTag = "latest" // Default to latest if no specific tag is configured
+		}
+		return "babelcloud/gbox-python:" + pythonTag
 	}
-	if !strings.Contains(image, ":") {
-		return image + ":latest"
+
+	// 2. Input is not empty, resolve using CheckImageTag (which handles env vars).
+	resolvedImg := config.CheckImageTag(image) // Use the fixed CheckImageTag
+
+	// 3. If CheckImageTag returned an image without a tag (original or unresolved), append ':latest'.
+	if !strings.Contains(resolvedImg, ":") {
+		return resolvedImg + ":latest"
 	}
-	return image
+
+	// 4. Otherwise, CheckImageTag already added a tag (original or from env var).
+	return resolvedImg
 }
 
 // MapToEnv converts a map of environment variables to a slice of "key=value" strings

@@ -81,6 +81,11 @@ func init() {
 	v.BindEnv("file.host_share", "GBOX_HOST_SHARE")
 	v.BindEnv("cluster.namespace", "GBOX_NAMESPACE")
 	v.BindEnv("browser.host", "GBOX_BROWSER_HOST")
+
+	// Image environment variables (bound to dynamically generated keys)
+	v.BindEnv("gbox.python.img.tag", "PY_IMG_TAG")
+	v.BindEnv("gbox.typescript.img.tag", "TS_IMG_TAG")
+
 	// Config file
 	v.SetConfigName("config")
 	v.SetConfigType("yaml")
@@ -288,4 +293,54 @@ func New() (*Config, error) {
 	// If Viper unmarshals non-empty values for Docker.Host or K8s.Config, those will be used.
 
 	return cfg, nil
+}
+
+func CheckImageTag(imgName string) string {
+	// 1. If the image name already contains a tag, return it as is.
+	if strings.Contains(imgName, ":") {
+		log.Info("Image name '%s' already contains a tag. Using original name.", imgName)
+		return imgName
+	}
+
+	log.Debug("Checking image tag for '%s'", imgName)
+	// 2. Extract repo name and base name once.
+	repoName := ""
+	baseName := imgName
+	if strings.Contains(imgName, "/") {
+		parts := strings.Split(imgName, "/")
+		if len(parts) > 1 {
+			// Assuming format like "repo/image" or "registry/repo/image"
+			repoName = strings.Join(parts[:len(parts)-1], "/") + "/"
+			baseName = parts[len(parts)-1]
+		} // else: malformed name like "/imagename", treat imgName as baseName
+	}
+	log.Debug("Repo name: '%s', Base name: '%s'", repoName, baseName)
+
+	// 3. Generate Viper key: replace '-' with '.' and append '.img.tag'.
+	vipKey := strings.ReplaceAll(baseName, "-", ".") + ".img.tag"
+	// Ensure key is lowercase if needed, although BindEnv is case-insensitive by default
+	vipKey = strings.ToLower(vipKey)
+	log.Debug("Dynamically generated key: %s", vipKey)
+
+	// 4. Check if the dynamically generated key is set in Viper (maps to env var).
+	if v.IsSet(vipKey) {
+		tag := v.GetString(vipKey)
+		if tag != "" {
+			// Use the extracted repoName and baseName
+			resolvedImage := repoName + baseName + ":" + tag
+			log.Info("Resolved image name '%s' to '%s' using dynamically generated key '%s'", imgName, resolvedImage, vipKey)
+			return resolvedImage // Return the fully formed image name with tag
+		} else {
+			log.Warn("Dynamically generated key '%s' for image '%s' is set but empty.", vipKey, imgName)
+		}
+	} else {
+		log.Debug("Dynamically generated key '%s' for image '%s' is not set.", vipKey, imgName)
+	}
+
+	// 5. If not resolved via env var, return the original untagged name..
+	return imgName
+}
+
+func GetPythonImageTag() string {
+	return v.GetString("gbox.python.img.tag")
 }

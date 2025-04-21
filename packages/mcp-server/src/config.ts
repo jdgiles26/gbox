@@ -21,8 +21,8 @@ export const config = {
     url: process.env.API_SERVER_URL || "http://localhost:28080/api/v1",
   },
   images: {
-    python: process.env.PY_IMG || "babelcloud/gbox-python:latest",
-    typescript: process.env.TS_IMG || "babelcloud/gbox-typescript:latest",
-    bash: process.env.SH_IMG || "ubuntu:latest",
+    python: process.env.PY_IMG || "babelcloud/gbox-python",
+    typescript: process.env.TS_IMG || "babelcloud/gbox-typescript",
+    bash: process.env.SH_IMG || "ubuntu",
   },
 } as const;
