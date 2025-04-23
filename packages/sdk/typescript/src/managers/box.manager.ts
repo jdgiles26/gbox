@@ -1,4 +1,5 @@
-import { BoxApi } from '../api/boxApi.ts';
+import { BoxApi } from '../api/box.api.ts';
+import { BrowserApi } from '../api/browser.api.ts'; // Import BrowserApi
 import { Box } from '../models/box.ts'; // Import the Box class
 // Use import type for interfaces/types
 import type {
@@ -12,10 +13,12 @@ import { APIError } from '../errors.ts'; // Errors are classes (runtime values),
 
 
 export class BoxManager {
-  private boxApi: BoxApi;
+  private readonly boxApi: BoxApi;
+  private readonly browserApi: BrowserApi; // Add browserApi property
 
-  constructor(boxApi: BoxApi) {
+  constructor(boxApi: BoxApi, browserApi: BrowserApi) {
     this.boxApi = boxApi;
+    this.browserApi = browserApi; // Store browserApi
   }
 
   /**
@@ -26,8 +29,8 @@ export class BoxManager {
    */
   async list(filters?: BoxListFilters): Promise<Box[]> {
     const response = await this.boxApi.list(filters);
-    // Wrap the raw BoxData in Box instances
-    return response.boxes.map(boxData => new Box(boxData, this.boxApi));
+    // Wrap the raw BoxData in Box instances, passing both APIs
+    return response.boxes.map(boxData => new Box(boxData, this.boxApi, this.browserApi));
   }
 
   /**
@@ -41,7 +44,8 @@ export class BoxManager {
   async get(boxId: string): Promise<Box> {
     // Use the renamed BoxApi method
     const boxData = await this.boxApi.getDetails(boxId);
-    return new Box(boxData, this.boxApi);
+    // Pass both APIs to the Box constructor
+    return new Box(boxData, this.boxApi, this.browserApi);
   }
 
   /**
@@ -52,16 +56,9 @@ export class BoxManager {
    * @throws {APIError} If creation fails.
    */
   async create(options: BoxCreateOptions): Promise<Box> {
-    // BoxApi.create now returns the correct BoxCreateResponse type (BoxData & { message? })
     const response = await this.boxApi.create(options);
-
-    // The actual response IS the box data. Remove the check for response.box.
-    // if (!response.box) { 
-    //     throw new APIError('API did not return box data on create', undefined, response);
-    // }
-
-    // Instantiate Box model directly using the response data
-    return new Box(response, this.boxApi);
+    // Instantiate Box model directly using the response data, passing both APIs
+    return new Box(response, this.boxApi, this.browserApi);
   }
 
   /**

@@ -1,5 +1,5 @@
 import type { AxiosInstance } from 'axios';
-import { Client } from './client.ts';
+import { Client } from './http-client.ts';
 import type {
   BoxCreateOptions,
   BoxCreateResponse,
@@ -13,7 +13,7 @@ import type {
   BoxExtractArchiveResponse,
 } from '../types/box.ts';
 
-const API_PREFIX = '/api/v1';
+const API_PREFIX = '/api/v1/boxes';
 
 export class BoxApi extends Client {
 
@@ -36,7 +36,7 @@ export class BoxApi extends Client {
         params['filter'] = filterParams;
       }
     }
-    const response = await super.get<BoxListResponse>(`${API_PREFIX}/boxes`, params);
+    const response = await super.get<BoxListResponse>(API_PREFIX, params);
     response.boxes = response.boxes.map(box => this.mapLabels(box));
     return response;
   }
@@ -46,7 +46,7 @@ export class BoxApi extends Client {
    * GET /api/v1/boxes/{id}
    */
   async getDetails(boxId: string): Promise<BoxGetResponse> {
-    const response = await super.get<BoxGetResponse>(`${API_PREFIX}/boxes/${boxId}`);
+    const response = await super.get<BoxGetResponse>(`${API_PREFIX}/${boxId}`);
     return this.mapLabels(response);
   }
 
@@ -66,7 +66,7 @@ export class BoxApi extends Client {
     if (options.workingDir) {
       apiOptions.workingDir = options.workingDir;
     }
-    const response = await super.post<BoxCreateResponse>(`${API_PREFIX}/boxes`, apiOptions);
+    const response = await super.post<BoxCreateResponse>(API_PREFIX, apiOptions);
 
     const mappedResponse = this.mapLabels(response);
 
@@ -79,7 +79,7 @@ export class BoxApi extends Client {
    */
   async deleteBox(boxId: string, force: boolean = false): Promise<{ message: string }> {
     const data = force ? { force } : undefined;
-    return super.delete<{ message: string }>(`${API_PREFIX}/boxes/${boxId}`, data);
+    return super.delete<{ message: string }>(`${API_PREFIX}/${boxId}`, data);
   }
 
   /**
@@ -88,7 +88,7 @@ export class BoxApi extends Client {
    */
   async deleteAll(force: boolean = false): Promise<BoxesDeleteResponse> {
     const data = force ? { force } : undefined;
-    return super.delete<BoxesDeleteResponse>(`${API_PREFIX}/boxes`, data);
+    return super.delete<BoxesDeleteResponse>(API_PREFIX, data);
   }
 
   /**
@@ -96,7 +96,7 @@ export class BoxApi extends Client {
    * POST /api/v1/boxes/{id}/start
    */
   async start(boxId: string): Promise<{ success: boolean; message: string }> {
-    return super.post<{ success: boolean; message: string }>(`${API_PREFIX}/boxes/${boxId}/start`, {});
+    return super.post<{ success: boolean; message: string }>(`${API_PREFIX}/${boxId}/start`, {});
   }
 
   /**
@@ -104,7 +104,7 @@ export class BoxApi extends Client {
    * POST /api/v1/boxes/{id}/stop
    */
   async stop(boxId: string): Promise<{ success: boolean; message: string }> {
-    return super.post<{ success: boolean; message: string }>(`${API_PREFIX}/boxes/${boxId}/stop`, {});
+    return super.post<{ success: boolean; message: string }>(`${API_PREFIX}/${boxId}/stop`, {});
   }
 
   /**
@@ -113,7 +113,7 @@ export class BoxApi extends Client {
    */
   async run(boxId: string, command: string[]): Promise<BoxRunResponse> {
     const data = { cmd: command };
-    const response = await super.post<BoxRunResponse>(`${API_PREFIX}/boxes/${boxId}/run`, data);
+    const response = await super.post<BoxRunResponse>(`${API_PREFIX}/${boxId}/run`, data);
     if (response.box) {
       response.box = this.mapLabels(response.box);
     }
@@ -127,7 +127,7 @@ export class BoxApi extends Client {
    */
   async reclaim(boxId?: string, force: boolean = false): Promise<BoxReclaimResponse> {
     const data = { force };
-    const url = boxId ? `${API_PREFIX}/boxes/${boxId}/reclaim` : `${API_PREFIX}/boxes/reclaim`;
+    const url = boxId ? `${API_PREFIX}/${boxId}/reclaim` : `${API_PREFIX}/reclaim`;
     return super.post<BoxReclaimResponse>(url, data);
   }
 
@@ -137,7 +137,7 @@ export class BoxApi extends Client {
    */
   async getArchive(boxId: string, path: string): Promise<ArrayBuffer> {
     const params = { path };
-    return super.getRaw(`${API_PREFIX}/boxes/${boxId}/archive`, params, { 'Accept': 'application/x-tar' });
+    return super.getRaw(`${API_PREFIX}/${boxId}/archive`, params, { 'Accept': 'application/x-tar' });
   }
 
   /**
@@ -147,7 +147,7 @@ export class BoxApi extends Client {
   async extractArchive(boxId: string, path: string, archiveData: ArrayBuffer): Promise<BoxExtractArchiveResponse> {
     const params = { path };
     return super.putRaw<BoxExtractArchiveResponse>(
-        `${API_PREFIX}/boxes/${boxId}/archive`,
+        `${API_PREFIX}/${boxId}/archive`,
         archiveData,
         params,
         { 'Content-Type': 'application/x-tar' }
@@ -160,7 +160,7 @@ export class BoxApi extends Client {
    */
   async headArchive(boxId: string, path: string): Promise<Record<string, string>> {
     const params = { path };
-    return super.head(`${API_PREFIX}/boxes/${boxId}/archive`, params);
+    return super.head(`${API_PREFIX}/${boxId}/archive`, params);
   }
 
   // Helper to map extra_labels from API to labels in SDK consistently

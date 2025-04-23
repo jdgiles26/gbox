@@ -1,4 +1,4 @@
-import { FileApi } from '../api/fileApi.ts';
+import { FileApi } from '../api/file.api.ts';
 import { GBoxFile } from '../models/file.ts';
 // Use import type for interfaces/types
 import type {

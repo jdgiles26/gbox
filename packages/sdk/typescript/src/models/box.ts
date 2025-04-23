@@ -1,4 +1,5 @@
-import { BoxApi } from '../api/boxApi.ts';
+import { BoxApi } from '../api/box.api.ts';
+import { BrowserApi } from '../api/browser.api.ts'; // Import BrowserApi
 // Use import type for interfaces/types
 import type {
   BoxData,
@@ -14,6 +15,10 @@ import * as tar from 'tar'; // Use the installed tar package
 import type { ReadEntry } from 'tar'; // Import specific type
 import { Readable } from 'node:stream'; // For converting ArrayBuffer to stream
 // --- End Node.js imports ---
+// Import Browser related types and models
+// import { BrowserContext } from './browserContext.ts'; // No longer needed here
+// import type { CreateContextParams, CreateContextResult } from '../types/browser.ts'; // No longer needed here
+import { BoxBrowserManager } from '../managers/browser.manager.ts'; // Import the new manager
 
 /**
  * Represents a GBox Box instance.
@@ -24,13 +29,15 @@ import { Readable } from 'node:stream'; // For converting ArrayBuffer to stream
 export class Box {
   // Store the core Box data
   public attrs: BoxData;
-  // Keep a reference to the API layer for instance methods
-  private boxApi: BoxApi;
+  // Keep references to the API layers for instance methods
+  private readonly boxApi: BoxApi;
+  private readonly browserApi: BrowserApi; // Add browserApi property
 
-  // Constructor now takes the BoxData object directly
-  constructor(boxData: BoxData, boxApi: BoxApi) {
+  // Constructor now takes BoxData, BoxApi, and BrowserApi
+  constructor(boxData: BoxData, boxApi: BoxApi, browserApi: BrowserApi) {
     this.attrs = boxData; // Store the initial attributes
     this.boxApi = boxApi;
+    this.browserApi = browserApi; // Store browserApi
   }
 
   // --- Getters for accessing attributes --- 
@@ -293,4 +300,14 @@ export class Box {
     // Use the getter for id
     return this.boxApi.headArchive(this.id, path);
   }
+
+  /**
+   * Gets a manager instance for handling browser contexts within this Box.
+   * @returns A BoxBrowserManager instance scoped to this Box.
+   */
+  initBrowser(): BoxBrowserManager {
+      return new BoxBrowserManager(this.id, this.browserApi);
+  }
+
+  // Potentially add listBrowserContexts, getBrowserContext in the future if API supports
 } 

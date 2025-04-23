@@ -250,7 +250,7 @@ func (h *Handler) ExecuteVisionScrollAction(req *restful.Request, resp *restful.
 
 // executeSpecificAction is a generic helper to reduce boilerplate in action handlers
 func executeSpecificAction[P any, R any]( // P: Params type, R: Result type
-	h *Handler,
+	_ *Handler,
 	req *restful.Request,
 	resp *restful.Response,
 	// Changed signature: Executor now takes IDs + Params

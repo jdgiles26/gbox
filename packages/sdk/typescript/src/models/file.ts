@@ -1,4 +1,4 @@
-import { FileApi } from '../api/fileApi.ts';
+import { FileApi } from '../api/file.api.ts';
 // Use import type for interfaces/types
 import type { FileInfo } from '../types/file.ts';
 import { NotFoundError } from '../errors.ts';

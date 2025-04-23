@@ -1,5 +1,5 @@
 import type { AxiosInstance } from 'axios'; // Use import type
-import { Client } from './client.ts'; // Add .ts
+import { Client } from './http-client.ts'; // Add .ts
 import type {
     FileInfo,
     FileReclaimApiResponse,

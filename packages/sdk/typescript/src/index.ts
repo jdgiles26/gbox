@@ -7,6 +7,7 @@ export type { GBoxClientConfig, Logger } from './config.ts';
 // Export managers if direct access is desired (though usually accessed via client)
 // export { BoxManager } from './managers/boxManager.ts';
 // export { FileManager } from './managers/fileManager.ts';
+// export { BrowserManager } from './managers/browserManager.ts';
 
 // Export custom error classes
 export * from './errors.ts';
@@ -17,4 +18,10 @@ export * from './types/file.ts';
 
 // Export Model classes
 export { Box } from './models/box.ts';
-export { GBoxFile } from './models/file.ts'; 
+export { GBoxFile } from './models/file.ts';
+export { BrowserContext } from './models/browser-context.ts';
+export { BrowserPage } from './models/browser-page.ts';
+
+// Export new browser-related exports
+export * from './api/browser.api.ts';
+export * from './types/browser.ts'; 
