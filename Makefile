@@ -17,6 +17,8 @@ endef
 API_SERVER_TAG := $(call get_git_hash,packages/api-server)
 MCP_SERVER_TAG := $(call get_git_hash,packages/mcp-server)
 PY_IMG_TAG := $(call get_git_hash,images/python)
+PW_IMG_TAG := $(call get_git_hash,images/playwright)
+VNC_IMG_TAG := $(call get_git_hash,images/viewer)
 TS_IMG_TAG := $(call get_git_hash,images/typescript)
 
 # Function to write env var to file (usage: $(call write_env,FILE,VAR,VALUE))
@@ -86,6 +88,8 @@ dist-%: ## Create package for specific platform and architecture (e.g., dist-dar
 	$(call append_env,$$PLATFORM_DIR/manifests/docker,MCP_SERVER_IMG_TAG,$(MCP_SERVER_TAG)); \
 	$(call append_env,$$PLATFORM_DIR/manifests/docker,PREFIX,""); \
 	$(call append_env,$$PLATFORM_DIR/manifests/docker,PY_IMG_TAG,$(PY_IMG_TAG)); \
+	$(call append_env,$$PLATFORM_DIR/manifests/docker,PW_IMG_TAG,$(PW_IMG_TAG)); \
+	$(call append_env,$$PLATFORM_DIR/manifests/docker,VNC_IMG_TAG,$(VNC_IMG_TAG)); \
 	$(call append_env,$$PLATFORM_DIR/manifests/docker,TS_IMG_TAG,$(TS_IMG_TAG)); \
 	if [ -f "packages/cli/gbox-$$PLATFORM_ARCH" ]; then \
 		ln -sf ../packages/cli/gbox $$PLATFORM_DIR/bin/gbox; \

@@ -1,5 +1,5 @@
 import { BrowserApi } from '../api/browser.api.ts';
-import { BrowserContext } from '../models/browser-context.ts'; // Import the model
+import { BrowserContext } from '../models/context.ts'; // Import the model
 import type { CreateContextParams, CreateContextResult } from '../types/browser.ts';
 
 /**

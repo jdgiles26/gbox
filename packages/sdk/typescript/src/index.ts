@@ -19,8 +19,8 @@ export * from './types/file.ts';
 // Export Model classes
 export { Box } from './models/box.ts';
 export { GBoxFile } from './models/file.ts';
-export { BrowserContext } from './models/browser-context.ts';
-export { BrowserPage } from './models/browser-page.ts';
+export { BrowserContext } from './models/context.ts';
+export { BrowserPage } from './models/page.ts';
 
 // Export new browser-related exports
 export * from './api/browser.api.ts';

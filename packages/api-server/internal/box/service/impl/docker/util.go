@@ -253,12 +253,12 @@ func GetEnvVars(env map[string]string) []string {
 func GetImage(image string) string {
 	// 1. Handle empty input: default to Python image
 	if image == "" {
-		pythonTag := config.GetPythonImageTag()
-		// Ensure default python image also gets a tag if GetPythonImageTag returns empty
-		if pythonTag == "" {
-			pythonTag = "latest" // Default to latest if no specific tag is configured
+		defaultImageTag := config.GetDefaultImageTag()
+		// Ensure default image also gets a tag if GetDefaultImageTag returns empty
+		if defaultImageTag == "" {
+			defaultImageTag = "latest" // Default to latest if no specific tag is configured
 		}
-		return "babelcloud/gbox-python:" + pythonTag
+		return "babelcloud/gbox-playwright:" + defaultImageTag
 	}
 
 	// 2. Input is not empty, resolve using CheckImageTag (which handles env vars).

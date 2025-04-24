@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strconv"
 	"sync"
 
@@ -153,7 +154,11 @@ func (s *BrowserService) getOrCreateManagedBrowser(boxID string) (*ManagedBrowse
 
 	portStr := strconv.Itoa(portInt)
 	host := config.GetInstance().Browser.Host
-	endpointURL := fmt.Sprintf("ws://%s:%s", host, portStr)
+
+	launchOptions := `{"channel":"chromium"}`
+	encodedOptions := url.QueryEscape(launchOptions)
+	endpointURL := fmt.Sprintf("ws://%s:%s?launch-options=%s", host, portStr, encodedOptions)
+	fmt.Printf("INFO: Connecting to Playwright endpoint: %s\n", endpointURL)
 
 	browserInstance, err := s.pw.Chromium.Connect(endpointURL)
 	if err != nil {

@@ -1,5 +1,5 @@
 import { BrowserApi } from '../api/browser.api.ts';
-import { BrowserPage } from './browser-page.ts'; // Assuming BrowserPage model exists
+import { BrowserPage } from './page.ts'; // Assuming BrowserPage model exists
 import type { CreatePageParams, ListPagesResult } from '../types/browser.ts';
 
 /**
