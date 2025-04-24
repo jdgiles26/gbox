@@ -8,10 +8,11 @@
         "skipLibCheck": true,
         "isolatedModules": true,
         "outDir": "dist",
-        "rootDir": "src"
+        "rootDir": ".."
     },
     "include": [
-        "src/**/*"
+        "src/**/*",
+        "../sdk/typescript/src/**/*"
     ],
     "exclude": [
         "node_modules",

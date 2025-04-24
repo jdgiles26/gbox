@@ -84,6 +84,8 @@ func init() {
 
 	// Image environment variables (bound to dynamically generated keys)
 	v.BindEnv("gbox.python.img.tag", "PY_IMG_TAG")
+	v.BindEnv("gbox.playwright.img.tag", "PW_IMG_TAG")
+	v.BindEnv("gbox.vnc.img.tag", "VNC_IMG_TAG")
 	v.BindEnv("gbox.typescript.img.tag", "TS_IMG_TAG")
 
 	// Config file
@@ -342,4 +344,20 @@ func CheckImageTag(imgName string) string {
 
 func GetPythonImageTag() string {
 	return v.GetString("gbox.python.img.tag")
+}
+
+func GetDefaultImageTag() string {
+	return GetPlaywrightImageTag()
+}
+
+func GetPlaywrightImageTag() string {
+	return v.GetString("gbox.playwright.img.tag")
+}
+
+func GetVNCImageTag() string {
+	return v.GetString("gbox.vnc.img.tag")
+}
+
+func GetTypescriptImageTag() string {
+	return v.GetString("gbox.typescript.img.tag")
 }

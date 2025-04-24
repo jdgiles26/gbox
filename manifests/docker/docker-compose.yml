@@ -19,6 +19,8 @@ services:
       - GBOX_SHARE=/var/gbox/share
       - GBOX_NAMESPACE=${PREFIX}${PREFIX:+-}gbox-boxes
       - PY_IMG_TAG=${PY_IMG_TAG:-latest}
+      - PW_IMG_TAG=${PW_IMG_TAG:-latest}
+      - VNC_IMG_TAG=${VNC_IMG_TAG:-latest}
       - TS_IMG_TAG=${TS_IMG_TAG:-latest}
       - SH_IMG_TAG=${SH_IMG_TAG:-latest}
     restart: unless-stopped
