@@ -1,29 +1,28 @@
 import { withLogging } from "../utils.js";
-import { config } from "../config.js";
-import { GBox } from "../sdk/index.js";
-import type { Logger } from "../sdk/types";
+import { Gbox } from "../service/index.js";
+import type { Logger } from '../service/gbox.instance.js';
 
 export const LIST_BOXES_TOOL = "list-boxes";
 export const LIST_BOXES_DESCRIPTION = "List all boxes.";
 
 export const handleListBoxes = withLogging(
   async (logger: Logger, {}, { sessionId, signal }) => {
-    const gbox = new GBox({
-      apiUrl: config.apiServer.url,
-      logger,
-    });
+    const gbox = new Gbox();
+    const boxesDetails = await gbox.boxes.getBoxes({ signal, sessionId });
 
     logger.info(`Listing boxes${sessionId ? ` for session: ${sessionId}` : ""}`);
 
-    const response = await gbox.box.getBoxes({ signal, sessionId });
+    logger.info(`Found ${boxesDetails.count} boxes`);
 
-    logger.info(`Found ${response.count} boxes`);
+    // Extract only the 'attrs' part from each box for a cleaner output
+    const boxAttributes = boxesDetails.boxes.map(box => box.attrs);
 
     return {
       content: [
         {
           type: "text" as const,
-          text: JSON.stringify(response.boxes, null, 2),
+          // Stringify only the extracted attributes
+          text: JSON.stringify(boxAttributes, null, 2),
         },
       ],
     };

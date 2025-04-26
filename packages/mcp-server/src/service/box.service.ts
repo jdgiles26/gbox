@@ -1,73 +1,47 @@
-import { Box } from '../../../sdk/typescript/src/models/box';
-import {
-    BoxCreateOptions,
-    BoxRunResponse,
-    BoxListFilters
-} from '../../../sdk/typescript/src/types/box';
-import { NotFoundError } from '../../../sdk/typescript/src/errors';
-import { Logger } from '../sdk/types';
-import client from './client'; // Import the default exported client instance
+import { 
+    Box, 
+    BoxBrowserManager, 
+    NotFoundError, 
+    type BoxRunResponse, 
+    type BoxRunOptions, 
+    type BoxListFilters, 
+    type BoxCreateOptions 
+} from './gbox.instance.js';
 
-// Type assertion might be needed if the imported client's type isn't specific enough
-// const typedClient = client as GBoxClient; // Example assertion if needed
+import { gbox } from './gbox.instance.js';
 
 export class BoxService {
-    private readonly boxManager: typeof client.boxes; // Get the type from the client instance
-    private readonly logger?: Logger; // Assuming a logger is passed or available
-    private readonly defaultImage = 'ubuntu:latest'; // Example default image
+    private readonly defaultImage = 'babelcloud/gbox-playwright';
     private readonly defaultCmd = ["sleep", "infinity"];
-    private readonly defaultWaitTimeoutSeconds = 120; // Default timeout for waiting
-
-    // TODO: Inject logger dependency if needed
-    constructor(logger?: Logger) {
-        // Use the imported client instance to access the BoxManager
-        // If 'client' is not already typed as GBoxClient, you might need type assertion: (client as GBoxClient).boxes
-        this.boxManager = client.boxes;
-        this.logger = logger;
-    }
+    private readonly defaultWaitTimeoutSeconds = 120;
 
     /**
      * Retrieves a list of Boxes, optionally filtered by sessionId or specific boxId.
-     * Corresponds to the old getBoxes.
      */
     async getBoxes(options: { sessionId?: string; boxId?: string; signal?: AbortSignal }): Promise<{ boxes: Box[]; count: number }> {
-        this.logger?.debug(`Getting boxes with options: ${JSON.stringify(options)}`);
-        // New SDK's list filters might differ. Adapt as needed.
-        // Currently, the new SDK BoxManager.list takes BoxListFilters, check its definition.
-        // Let's assume simple filtering by ID for now if boxId is provided.
-        // SessionId filtering might need label filtering `label: { sessionId: options.sessionId }`
-        // AbortSignal is usually handled by the underlying client methods in the new SDK.
-
         try {
             let boxes: Box[];
             if (options.boxId) {
-                // Fetch specific box if ID is given
-                 try {
-                    // Use boxManager from the initialized client
-                    const box = await this.boxManager.get(options.boxId);
+                try {
+                    const box = await gbox.boxes.get(options.boxId, options.signal);
                     boxes = [box];
-                 } catch (error: unknown) {
-                    // FIX: Use imported NotFoundError for specific error handling
+                } catch (error: unknown) {
                     if (error instanceof NotFoundError) {
-                         boxes = [];
+                        boxes = [];
                     } else {
-                        throw error; // Re-throw other errors
+                        throw error;
                     }
-                 }
+                }
             } else {
-                 // FIX: Implement filtering using BoxListFilters
-                 let filters: BoxListFilters | undefined;
-                 if (options.sessionId) {
-                    // Filter by label 'sessionId=value'
+                let filters: BoxListFilters | undefined;
+                if (options.sessionId) {
                     filters = { label: [`sessionId=${options.sessionId}`] };
-                 }
-                 boxes = await this.boxManager.list(filters); // Pass filters to manager
+                }
+                boxes = await gbox.boxes.list(filters, options.signal);
             }
 
-            this.logger?.debug(`Found ${boxes.length} boxes.`);
             return { boxes, count: boxes.length };
         } catch (error) {
-            this.logger?.error('Error getting boxes:', error);
             throw error;
         }
     }
@@ -77,26 +51,18 @@ export class BoxService {
      * Corresponds to the old getBox.
      */
     async getBox(id: string, options?: { signal?: AbortSignal; sessionId?: string }): Promise<Box> {
-         this.logger?.debug(`Getting box with ID: ${id}, options: ${JSON.stringify(options)}`);
-         // TODO: Handle sessionId filtering if necessary, maybe after getting the box?
-         try {
-            const box = await this.boxManager.get(id);
-            // FIX: Use imported NotFoundError for specific error handling
+        try {
+            const box = await gbox.boxes.get(id, options?.signal);
             if (options?.sessionId && box.labels?.sessionId !== options.sessionId) {
-                 // Throw an error indicating mismatch or not found in session
-                 throw new Error(`Box ${id} found but does not belong to session ${options.sessionId}`);
+                throw new Error(`Box ${id} found but does not belong to session ${options.sessionId}`);
             }
-            this.logger?.debug(`Got box: ${box.id}`);
             return box;
-         } catch (error: unknown) {
-            // FIX: Use imported NotFoundError for specific error handling
+        } catch (error: unknown) {
             if (error instanceof NotFoundError || (error instanceof Error && error.message.includes('does not belong to session'))) {
-                this.logger?.warn(`Error getting box ${id} (specific): ${error}`);
             } else {
-                this.logger?.error(`Error getting box ${id} (generic):`, error);
             }
-            throw error; // Re-throw the error for the caller to handle
-         }
+            throw error;
+        }
     }
 
     /**
@@ -104,14 +70,10 @@ export class BoxService {
      * Corresponds to the old startBox.
      */
     async startBox(id: string, signal?: AbortSignal): Promise<void> {
-        this.logger?.debug(`Starting box with ID: ${id}`);
         try {
-            const box = await this.boxManager.get(id);
-            // FIX: Box model's start() method takes no arguments. Signal not handled here.
-            await box.start();
-            this.logger?.debug(`Box ${id} started successfully.`);
+            const box = await gbox.boxes.get(id, signal);
+            await box.start(signal);
         } catch (error) {
-            this.logger?.error(`Error starting box ${id}:`, error);
             throw error;
         }
     }
@@ -128,9 +90,6 @@ export class BoxService {
           signal?: AbortSignal;
         }
       ): Promise<Box> {
-        this.logger?.debug(`Creating box with image: ${image}, options: ${JSON.stringify(options)}`);
-
-        // FIX: Split defaultCmd into cmd (string) and args (string[]) for BoxCreateOptions
         const [cmdString, ...argsArray] = this.defaultCmd;
 
         const createOptions: BoxCreateOptions = {
@@ -140,11 +99,9 @@ export class BoxService {
           labels: options.sessionId ? { sessionId: options.sessionId } : undefined,
         };
         try {
-            const newBox = await this.boxManager.create(createOptions);
-            this.logger?.debug(`Box created successfully: ${newBox.id}`);
-            return newBox; // Return the Box instance
+            const newBox = await gbox.boxes.create(createOptions, options.signal);
+            return newBox;
         } catch(error) {
-            this.logger?.error('Error creating box:', error);
             throw error;
         }
     }
@@ -153,44 +110,32 @@ export class BoxService {
      * Helper method to wait for a box to reach 'running' state.
      */
     private async _waitForBoxReady(boxId: string, timeoutSeconds?: number): Promise<void> {
-        const effectiveTimeout = (timeoutSeconds ?? this.defaultWaitTimeoutSeconds) * 1000; // milliseconds
-        const pollInterval = 2000; // Check every 2 seconds
+        const effectiveTimeout = (timeoutSeconds ?? this.defaultWaitTimeoutSeconds) * 1000;
+        const pollInterval = 2000;
         const startTime = Date.now();
-
-        this.logger?.debug(`Waiting for box ${boxId} to be ready (timeout: ${effectiveTimeout / 1000}s)...`);
 
         return new Promise((resolve, reject) => {
             const checkStatus = async () => {
                 if (Date.now() - startTime > effectiveTimeout) {
-                    this.logger?.error(`Timeout waiting for box ${boxId} to become ready.`);
                     return reject(new Error(`Timeout waiting for box ${boxId} to become ready`));
                 }
 
                 try {
-                    const box = await this.getBox(boxId); // Use getBox to handle potential not found errors during wait
-                    this.logger?.debug(`Box ${boxId} current status: ${box.status}`);
+                    const box = await this.getBox(boxId);
                     if (box.status === 'running') {
-                        this.logger?.debug(`Box ${boxId} is ready.`);
                         return resolve();
                     } else if (['stopped', 'error', 'deleted', 'exited'].includes(box.status)) {
-                        // Box entered a terminal state unexpectedly
-                        this.logger?.error(`Box ${boxId} entered terminal state '${box.status}' while waiting to be ready.`);
                         return reject(new Error(`Box ${boxId} entered terminal state '${box.status}' while waiting`));
                     } else {
-                        // Still creating or starting, poll again
                         setTimeout(checkStatus, pollInterval);
                     }
                 } catch (error: unknown) {
-                    // If getBox fails (e.g., NotFoundError), reject
-                    this.logger?.error(`Error checking status for box ${boxId}:`, error);
-                    // Propagate specific errors if needed
                     if (error instanceof NotFoundError) {
                          return reject(new Error(`Box ${boxId} not found while waiting for ready status.`));
                     }
                     return reject(error);
                 }
             };
-            // Initial check
             setTimeout(checkStatus, 0);
         });
     }
@@ -201,73 +146,71 @@ export class BoxService {
      */
     async getOrCreateBox(options: {
         boxId?: string;
-        image?: string; // Image is needed if creating
+        image?: string;
         sessionId?: string;
         signal?: AbortSignal;
-        waitTimeoutSeconds?: number; // Add timeout option for waiting
-    }): Promise<string> { // Returns Box ID
-        this.logger?.debug(`Getting or creating box with options: ${JSON.stringify(options)}`);
+        waitTimeoutSeconds?: number;
+    }): Promise<string> {
         const { boxId, image, sessionId, signal, waitTimeoutSeconds } = options;
 
-        // 1. If boxId is provided, try to get it
         if (boxId) {
             try {
                 const box = await this.getBox(boxId, { sessionId, signal });
                 if (box.status === 'stopped') {
-                    this.logger?.debug(`Box ${boxId} is stopped, starting...`);
-                    await this.startBox(boxId);
-                    // FIX: Wait for the box to be ready after starting
+                    await this.startBox(boxId, signal);
                     await this._waitForBoxReady(boxId, waitTimeoutSeconds);
-                    this.logger?.debug(`Started and waited for box ${boxId}.`);
                 }
-                this.logger?.debug(`Found existing box by ID: ${boxId}`);
                 return boxId;
             } catch (error: unknown) {
-                 // FIX: Use imported NotFoundError and check message for session mismatch
                  if (error instanceof NotFoundError || (error instanceof Error && error.message.includes('does not belong to session'))) {
-                     this.logger?.debug(`Box with ID ${boxId} not found or session mismatch, proceeding...`);
                  } else {
-                    this.logger?.error(`Error getting box ${boxId}:`, error);
-                    throw error; // Re-throw unexpected errors
+                    throw error;
                  }
             }
         }
 
-        // 2. Try to reuse an existing box with matching image and session
         const effectiveImage = image || this.defaultImage;
         const listOptions = { sessionId, signal };
         const { boxes } = await this.getBoxes(listOptions);
 
         const runningBox = boxes.find(
-            (box) => box.image === effectiveImage && box.status === 'running'
+            (box) => box.image.split(':')[0] === effectiveImage && box.status === 'running'
         );
         if (runningBox) {
-            this.logger?.debug(`Reusing running box: ${runningBox.id}`);
             return runningBox.id;
         }
 
         const stoppedBox = boxes.find(
-            (box) => box.image === effectiveImage && box.status === 'stopped'
+            (box) => box.image.split(':')[0] === effectiveImage && box.status === 'stopped'
         );
         if (stoppedBox) {
-            this.logger?.debug(`Found stopped box ${stoppedBox.id}, starting...`);
-            await this.startBox(stoppedBox.id);
-            // FIX: Wait for the box to be ready after starting
+            await this.startBox(stoppedBox.id, signal);
             await this._waitForBoxReady(stoppedBox.id, waitTimeoutSeconds);
-            this.logger?.debug(`Reusing started and waited for box: ${stoppedBox.id}`);
             return stoppedBox.id;
         }
 
-        // 3. Create a new box if no suitable one is found
-        this.logger?.debug(`No suitable existing box found. Creating new box with image ${effectiveImage}...`);
         const newBox = await this.createBox(effectiveImage, {
             sessionId,
             signal,
         });
-        // FIX: Wait for the newly created box to be ready
         await this._waitForBoxReady(newBox.id, waitTimeoutSeconds);
-        this.logger?.debug(`Created and waited for new box: ${newBox.id}`);
         return newBox.id;
+    }
+
+    /**
+     * Initializes the browser manager for a specific Box.
+     * This provides access to browser context and page operations via the SDK's manager.
+     * @param boxId The ID of the Box.
+     * @returns A Promise resolving to a BoxBrowserManager instance.
+     */
+    async initBrowser(boxId: string, signal?: AbortSignal): Promise<BoxBrowserManager> {
+        try {
+            const box = await gbox.boxes.get(boxId, signal);
+            const browserManager = box.initBrowser();
+            return browserManager;
+        } catch (error) {
+            throw error;
+        }
     }
 
      /**
@@ -278,17 +221,16 @@ export class BoxService {
     async runInBox(
         id: string,
         command: string | string[],
-        stdin: string = "", // Stdin currently ignored by box.run
-        options: {
-            signal?: AbortSignal; // Signal currently ignored by box.run
-            stdoutLineLimit?: number; // Limits currently ignored by box.run
-            stderrLineLimit?: number;
+        stdin: string,
+        stdoutLineLimit: number,
+        stderrLineLimit: number,
+        context: {
+            signal?: AbortSignal;
+            sessionId?: string;
         } = {}
-     // FIX: Use BoxRunResponse as the return type
     ): Promise<BoxRunResponse> {
-        this.logger?.debug(`Running command in box ${id}: ${JSON.stringify(command)}`);
         try {
-            const box = await this.getBox(id, { signal: options.signal });
+            const box = await gbox.boxes.get(id, context.signal);
 
             let cmdArray: string[];
             if (Array.isArray(command)) {
@@ -297,34 +239,18 @@ export class BoxService {
                  cmdArray = command.split(' ');
              }
 
-             // Call box.run with string[] as per models/box.ts definition
-             const result = await box.run(cmdArray); // This now matches the Box model
+             const runOptions: BoxRunOptions = {
+                 stdin: stdin,
+                 signal: context?.signal,
+                 stdoutLineLimit: stdoutLineLimit,
+                 stderrLineLimit: stderrLineLimit,
+             };
 
-            this.logger?.debug(`Command in box ${id} finished with exit code: ${result.exitCode}`);
-             // FIX: Return type is BoxRunResponse, no need for assertion if BoxRunResult was meant to be this
+             const result = await box.run(cmdArray, runOptions, context.signal);
+
             return result;
         } catch (error) {
-            this.logger?.error(`Error running command in box ${id}:`, error);
             throw error;
         }
     }
-
-    // Add other methods as needed, potentially mapping directly
-    // to BoxManager methods like deleteAll, reclaim, or methods on Box instances.
 }
-
-// Example of how the service might be instantiated and used (optional)
-// const loggerInstance = console; // Replace with your actual logger
-// const boxService = new BoxService(loggerInstance);
-// boxService.getOrCreateBox({ image: 'python:3.11-slim', sessionId: 'my-session-123' })
-//   .then(boxId => {
-//     console.log(`Got or created box: ${boxId}`);
-//     // Note: stdin would be ignored in the current BoxService.runInBox implementation
-//     return boxService.runInBox(boxId, ['python', '-c', 'print("Hello from Box!")']);
-//   })
-//   .then(result => {
-//     console.log('Run result:', result.stdout);
-//   })
-//   .catch(error => {
-//     console.error('Box service error:', error);
-//   });

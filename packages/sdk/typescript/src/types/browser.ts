@@ -137,7 +137,7 @@ export interface VisionScreenshotParams {
 }
 
 export interface VisionScreenshotResult extends VisionBaseResult {
-  base64Content?: string;
+  base64_content?: string;
   url?: string;
 }
 
@@ -145,4 +145,4 @@ export interface VisionScreenshotResult extends VisionBaseResult {
 export interface VisionErrorResult {
   success: false;
   error: string;
-} 
+}

@@ -1,10 +1,10 @@
 import { config } from "./config.js";
-import { GBox } from "./sdk/index.js";
+import { Gbox } from "./service/index.js";
 import {
   withLogging,
   withLoggingResourceTemplate,
 } from "./utils.js";
-import type { Logger } from "./sdk/types";
+import type { Logger } from "./service/gbox.instance.js";
 
 // Box interface
 interface Box {
@@ -18,12 +18,9 @@ const boxTemplate = withLoggingResourceTemplate("gbox:///boxes/{boxId}", {
   list: async (logger: Logger, { signal, sessionId }) => {
     logger.info("Starting to fetch boxes");
 
-    const sdk = new GBox({
-      apiUrl: config.apiServer.url,
-      logger,
-    });
+    const gbox = new Gbox();
 
-    const response = await sdk.box.getBoxes({ signal, sessionId });
+    const response = await gbox.boxes.getBoxes({ signal, sessionId });
     logger.info(`Found ${response.boxes.length} boxes`);
 
     if (!response.boxes || response.boxes.length === 0) {
@@ -65,12 +62,9 @@ export const handleBoxResource = withLogging(
       };
     }
 
-    const sdk = new GBox({
-      apiUrl: config.apiServer.url,
-      logger,
-    });
+    const gbox = new Gbox();
 
-    const box = await sdk.box.getBox(boxId, { signal, sessionId });
+    const box = await gbox.boxes.getBox(boxId, { signal, sessionId });
     logger.info(`Successfully fetched box ${boxId}`);
     return {
       contents: [

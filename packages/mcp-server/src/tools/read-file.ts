@@ -1,9 +1,8 @@
 import { withLogging } from "../utils.js";
 import { config } from "../config.js";
-import { GBox, FILE_SIZE_LIMITS } from "../sdk/index.js";
+import { Gbox } from "../service/index.js";
 import { z } from "zod";
-import type { Logger } from "../sdk/types";
-import type { FileStat } from "../sdk/types.js";
+import { GBoxFile, Logger, FILE_SIZE_LIMITS } from "../service/gbox.instance.js";
 
 export const READ_FILE_TOOL = "read-file";
 export const READ_FILE_DESCRIPTION = `Read a file from the API server.
@@ -21,17 +20,12 @@ export const readFileParams = {
 
 // Helper function to handle file content based on type and size
 async function handleFileContent(
-  sdk: GBox,
-  fileStat: FileStat,
-  mimeType: string,
-  contentLength: number,
-  path: string,
-  boxId: string,
+  file: GBoxFile,
   signal: AbortSignal,
   logger: Logger
 ) {
   // For directories, return error
-  if (fileStat.type === "directory") {
+  if (file.type === "dir") {
     return {
       content: [
         {
@@ -44,8 +38,8 @@ async function handleFileContent(
   }
 
   // For small text files (less than 1MB), return content directly
-  if (mimeType.startsWith("text/") && contentLength < FILE_SIZE_LIMITS.TEXT) {
-    const text = await sdk.file.readFileAsText(`${boxId}${path}`, signal);
+  if (file.mime?.startsWith("text/") && file.size < FILE_SIZE_LIMITS.TEXT) {
+    const text = await file.readText();
     return {
       content: [
         {
@@ -58,11 +52,11 @@ async function handleFileContent(
 
   // For small images (less than 5MB), return base64 encoded content
   if (
-    mimeType.startsWith("image/") &&
-    contentLength < FILE_SIZE_LIMITS.BINARY
+    file.mime?.startsWith("image/") &&
+    file.size < FILE_SIZE_LIMITS.BINARY
   ) {
-    logger.info(`Reading image file: ${path}, from box: ${boxId}`);
-    const buffer = await sdk.file.readFileAsBuffer(`${boxId}${path}`, signal);
+    logger.info(`Reading image file: ${file.path}`);
+    const buffer = await file.read();
     if (!buffer) {
       return {
         content: [
@@ -74,14 +68,14 @@ async function handleFileContent(
         isError: true,
       };
     }
-    const base64 = sdk.file.bufferToBase64(buffer);
+    const base64 = Buffer.from(buffer).toString("base64");
     logger.info("base64: ", base64);
     return {
       content: [
         {
           type: "image" as const,
           data: base64,
-          mimeType,
+          mimeType: file.mime!,
         },
       ],
     };
@@ -89,10 +83,10 @@ async function handleFileContent(
 
   // For small audio files (less than 5MB), return base64 encoded content
   if (
-    mimeType.startsWith("audio/") &&
-    contentLength < FILE_SIZE_LIMITS.BINARY
+    file.mime?.startsWith("audio/") &&
+    file.size < FILE_SIZE_LIMITS.BINARY
   ) {
-    const buffer = await sdk.file.readFileAsBuffer(`${boxId}${path}`, signal);
+    const buffer = await file.read();
     if (!buffer) {
       return {
         content: [
@@ -104,13 +98,13 @@ async function handleFileContent(
         isError: true,
       };
     }
-    const base64 = sdk.file.bufferToBase64(buffer);
+    const base64 = Buffer.from(buffer).toString("base64");
     return {
       content: [
         {
           type: "audio" as const,
           data: base64,
-          mimeType,
+          mimeType: file.mime!,
         },
       ],
     };
@@ -121,7 +115,7 @@ async function handleFileContent(
     content: [
       {
         type: "text" as const,
-        text: `${config.apiServer.url}/files/${boxId}${path}`,
+        text: `${config.apiServer.url}/files/${file.path}`,
       },
     ],
   };
@@ -130,66 +124,35 @@ async function handleFileContent(
 // Read file handler
 export const handleReadFile = withLogging(
   async (logger: Logger, { path, boxId }, { signal }) => {
-    const gbox = new GBox({
-      apiUrl: config.apiServer.url,
-      logger,
-    });
-
     logger.info(`Reading file: ${path}${boxId ? ` from box: ${boxId}` : ""}`);
 
     // TODO: should check file meta, if file not changed, should not copy it
     // Copy the file from sandbox to the share directory
-    const shareResponse = await gbox.file.shareFile(path, boxId, signal);
-      if (!shareResponse || !shareResponse.success) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: shareResponse?.message || "Failed to read file",
-            },
-          ],
-          isError: true,
-        };
-      }
+    const gbox = new Gbox();
+    const file = await gbox.files.shareFile(path, boxId, signal);
 
-      logger.info(
-        `File shared successfully: ${
-          shareResponse.message
-        }\nShared files: ${shareResponse.fileList
-          ?.map((f) => f.path)
-          .join(", ")}`
-      );
-
-    // Get file metadata after sharing
-    const metadata = await gbox.file.getFileMetadata(`${boxId}${path}`, signal);
-
-    if (!metadata) {
+    if (!file) {
       return {
         content: [
           {
             type: "text" as const,
-            text: "File not found",
+            text: "Failed to read file",
           },
         ],
         isError: true,
       };
     }
 
-    const { fileStat, mimeType, contentLength } = metadata;
-
     logger.info(
-      `File metadata: ${JSON.stringify(
-        fileStat
-      )}, mimeType: ${mimeType}, contentLength: ${contentLength}`
+      `File shared successfully: 
+      attrs: ${JSON.stringify(file.attrs, null, 2)}
+      mimeType: ${file.mime}
+      size: ${file.size}
+      `
     );
 
     return handleFileContent(
-      gbox,
-      fileStat,
-      mimeType,
-      contentLength,
-      path,
-      boxId,
+      file,
       signal,
       logger
     );

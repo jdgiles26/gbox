@@ -28,7 +28,7 @@ export class GBoxFile {
     this.fileApi = fileApi;
   }
 
-  // --- Getters mimicking Python @property --- 
+  // --- Getters mimicking Python @property ---
 
   get name(): string {
     return this.attrs.name;
@@ -59,40 +59,49 @@ export class GBoxFile {
     return this.attrs.type === 'dir';
   }
 
-  // --- Instance Methods --- 
+  // --- Instance Methods ---
 
   /**
    * Reads the content of the file as an ArrayBuffer.
+   * @param signal An optional AbortSignal to cancel the operation.
    */
-  async read(): Promise<ArrayBuffer> {
-    if (this.isDir) { // Use the getter
+  async read(signal?: AbortSignal): Promise<ArrayBuffer> {
+    if (this.isDir) {
+      // Use the getter
       throw new Error(`Cannot read content of a directory: ${this.path}`);
     }
     // Use the stored path for the API call
-    return this.fileApi.getContent(this.path);
+    return this.fileApi.getContent(this.path, signal);
   }
 
   /**
    * Reads the content of the file as a UTF-8 string.
+   * @param signal An optional AbortSignal to cancel the operation.
    */
-  async readText(encoding: string = 'utf-8'): Promise<string> {
-     const buffer = await this.read();
-     const decoder = new TextDecoder(encoding);
-     return decoder.decode(buffer);
+  async readText(
+    encoding: string = 'utf-8',
+    signal?: AbortSignal
+  ): Promise<string> {
+    const buffer = await this.read(signal);
+    const decoder = new TextDecoder(encoding);
+    return decoder.decode(buffer);
   }
 
   /**
    * Reloads the file's metadata from the API and updates the `attrs` property.
+   * @param signal An optional AbortSignal to cancel the operation.
    */
-  async reload(): Promise<void> {
+  async reload(signal?: AbortSignal): Promise<void> {
     // Use the stored path for the API call
-    const updatedInfo = await this.fileApi.getStat(this.path);
+    const updatedInfo = await this.fileApi.getStat(this.path, signal);
     if (updatedInfo) {
-        // Update the attrs property with the new validated data
-        this.attrs = updatedInfo;
+      // Update the attrs property with the new validated data
+      this.attrs = updatedInfo;
     } else {
-        // Consider the file gone, throw NotFoundError consistent with get
-        throw new NotFoundError(`Failed to reload metadata for file: ${this.path}. File may not exist.`);
+      // Consider the file gone, throw NotFoundError consistent with get
+      throw new NotFoundError(
+        `Failed to reload metadata for file: ${this.path}. File may not exist.`
+      );
     }
   }
 
@@ -103,14 +112,14 @@ export class GBoxFile {
 
   // Implement equals based on path?
   equals(other: unknown): boolean {
-      if (other instanceof GBoxFile) {
-          return this.path === other.path;
-      }
-      return false;
+    if (other instanceof GBoxFile) {
+      return this.path === other.path;
+    }
+    return false;
   }
 
   // Potential future methods:
   // async delete(): Promise<void> { /* Requires API support */ }
   // async rename(newPath: string): Promise<void> { /* Requires API support */ }
   // async listDir(): Promise<GBoxFile[]> { /* If API supports listing directory content */ }
-} 
+}

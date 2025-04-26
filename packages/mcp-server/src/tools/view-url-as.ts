@@ -1,20 +1,8 @@
-import { z } from "zod";
-import { GBox } from "../sdk"; // Assuming GBox provides client and boxId
-import { Client } from "../sdk/client"; // Import Client type
-import {
-  BrowserContextOperations,
-  ContextPageOperations,
-  PageOperations,
-} from "../sdk/browser"; // Import operation classes
-import type {
-  Logger,
-  VisionScreenshotParams, // Import the specific type
-  VisionScreenshotResult, // Import the specific type
-  BrowserErrorResult, // Added missing import
-} from "../sdk/types";
-import { isBrowserErrorResult } from "../sdk/types"; // Import type guard if needed
+import { z } from "zod";// Import type guard if needed
 import { withLogging } from "../utils.js"; // Added import
 import { config } from "../config.js"; // Added import
+import { Gbox } from "../service/index.js";
+import { BrowserPage, BrowserContext, BoxBrowserManager, type VisionScreenshotResult, type VisionScreenshotParams, type Logger } from "../service/gbox.instance.js";
 
 // Define the Zod schema for the tool's parameters, including name and description
 export const ViewUrlAsSchema = z.object({
@@ -76,36 +64,23 @@ async function _handleViewUrlAs(
   { signal, sessionId }: { signal: AbortSignal; sessionId?: string }
 ): Promise<{ content: Array<ResultContent> }> {
   // UPDATED return type
-  const gbox = new GBox({
-    apiUrl: config.apiServer.url,
-    logger,
-  });
+  const gbox = new Gbox();
 
-  // Note: Assuming gbox.client is the correct way to get the Client instance
-  const client = gbox.client; // Get client from gbox instance
-
-  if (!client) {
-    // Check if client is available
-    const errorMsg = "GBox client is missing for browser operations.";
-    logger.error(errorMsg);
-    return { content: [{ type: "error", text: errorMsg }] };
-  }
-
-  let contextOps: BrowserContextOperations | null = null;
-  let pageOps: PageOperations | null = null;
   let contextId: string | null = null;
   let pageId: string | null = null;
   let actualBoxId: string | null = null; // To store the obtained box ID
+  let browser: BoxBrowserManager | null = null; // Declare browser outside try, use any for now
+  let context: BrowserContext | null = null; // Declare context outside try, use any for now
+  let page: BrowserPage | null = null; // Declare page outside try, use any for now
 
   try {
     // Get or create box
-    actualBoxId = await gbox.box.getOrCreateBox({
+    actualBoxId = await gbox.boxes.getOrCreateBox({
       boxId,
       image: config.images.playwright,
       sessionId,
       signal,
-      waitForReady: true, // Wait for the box healthcheck to pass
-      waitForReadyTimeoutSeconds: 60, // Timeout after 60 seconds
+      waitTimeoutSeconds: 60,
     });
 
     logger.info(
@@ -115,41 +90,30 @@ async function _handleViewUrlAs(
     );
 
     // Instantiate BrowserContextOperations with obtained boxId
-    contextOps = new BrowserContextOperations(client, actualBoxId);
+    browser = await gbox.boxes.initBrowser(actualBoxId);
 
     // 1. Create a new browser context
-    const contextResult = await contextOps.create(/* { signal } */);
-    contextId = contextResult.context_id;
+    context = await browser.createContext({}, signal); // Assign to the outer context variable
+    if (!context) {
+      logger.error("Failed to create browser context");
+      return { content: [{ type: "error", text: "Failed to create browser context" }] };
+    }
+    contextId = context.id;
     logger.debug(`Created browser context: ${contextId}`);
-
-    // Instantiate ContextPageOperations with obtained boxId
-    const contextPageOps = new ContextPageOperations(
-      client,
-      actualBoxId,
-      contextId
-    );
 
     // 2. Create a new page and navigate to the URL
     const pageParams = {
       url,
       wait_until: "load" as const, // Use const assertion
     };
-    const pageResult = await contextPageOps.create(pageParams);
-    pageId = pageResult.page_id;
+    page = await context.createPage(pageParams, signal); // Assign to the outer page variable
+    pageId = page.id;
     logger.debug(`Created page ${pageId} and navigated to URL: ${url}`);
 
-    // Instantiate PageOperations with obtained boxId
-    pageOps = new PageOperations(client, actualBoxId, contextId, pageId);
-
-    // 3. Perform the requested action
     let resultText: string | undefined; // Make optional as it's not always set
     switch (as) {
       case "html": {
-        const getParams = {
-          withContent: true,
-          contentType: "html" as const, // Use const assertion
-        };
-        const result = await pageOps.get(getParams);
+        const result = await page.getContent();
         logger.info(
           `Fetched HTML content for ${url}. Length: ${
             result.content?.length ?? 0
@@ -159,11 +123,7 @@ async function _handleViewUrlAs(
         break;
       }
       case "markdown": {
-        const getParams = {
-          withContent: true,
-          contentType: "markdown" as const, // Use const assertion
-        };
-        const result = await pageOps.get(getParams);
+        const result = await page.getContent("markdown");
         logger.info(
           `Fetched Markdown content for ${url}. Length: ${
             result.content?.length ?? 0
@@ -173,35 +133,16 @@ async function _handleViewUrlAs(
         break;
       }
       case "screenshot": {
-        // Specify base64 output format and pass type from input params
         const screenshotParams: VisionScreenshotParams = {
-          output_format: "base64" as const,
-          // Determine type based on the 'as' parameter logic (though screenshot always returns png/jpeg)
-          // The backend decides the actual format, but we can hint based on future extensions
-          // For now, the backend defaults to png if type is not jpeg.
-          // type: as === 'screenshot' ? undefined : as, // This logic is flawed
+          outputFormat: "base64" as const,
         };
-        // Potentially refine type based on future params, for now API handles default
-
-        const result: VisionScreenshotResult | BrowserErrorResult =
-          await pageOps.screenshot(screenshotParams);
-
+        
+        const result: VisionScreenshotResult | BrowserErrorResult = await page.screenshot(screenshotParams);
         if (result.success === true && result.base64_content) {
           logger.info(
             `Took screenshot for ${url}, returning base64 data (length: ${result.base64_content.length}).`
           );
-
-          // Determine MIME type - NEEDS IMPROVEMENT
-          // Ideally, the backend API should return the actual mime type.
-          // For now, we assume PNG unless the backend explicitly signals JPEG (which it doesn't directly).
-          // We *cannot* reliably infer the type from the base64 string itself without more complex logic.
-          // Defaulting to png as per current backend behavior.
           let mimeType = "image/png";
-          // if (screenshotParams.type === "jpeg") { // Cannot reliably check screenshotParams.type here
-          //    mimeType = "image/jpeg";
-          // }
-
-          // Return the structured image content directly
           return {
             content: [
               {
@@ -211,7 +152,7 @@ async function _handleViewUrlAs(
               },
             ],
           };
-        } else if (result.success === true && !result.base64_content) {
+          } else if (result.success === true && !result.base64_content) {
           const errorMsg = `Screenshot succeeded but base64 content is missing.`;
           logger.error(errorMsg);
           return { content: [{ type: "error", text: errorMsg }] };
@@ -258,10 +199,10 @@ async function _handleViewUrlAs(
   } finally {
     // 4. Ensure cleanup: Close page and context
     // Note: Signal is not typically passed to cleanup operations
-    if (pageOps) {
+    if (pageId) { // Check if page was assigned
       try {
         logger.debug(`Closing page ${pageId}...`);
-        await pageOps.close();
+        await context?.closePage(pageId);
       } catch (closePageError: any) {
         logger.warn(
           `Failed to close page ${pageId}: ${
@@ -270,10 +211,10 @@ async function _handleViewUrlAs(
         );
       }
     }
-    if (contextOps && contextId) {
+    if (contextId) { // Check if context was assigned
       try {
         logger.debug(`Closing context ${contextId}...`);
-        await contextOps.close(contextId);
+        await browser?.closeContext(contextId);
       } catch (closeContextError: any) {
         logger.warn(
           `Failed to close context ${contextId}: ${
@@ -287,3 +228,12 @@ async function _handleViewUrlAs(
 
 // Export the wrapped function
 export const handleViewUrlAs = withLogging(_handleViewUrlAs);
+
+export function isBrowserErrorResult(obj: any): obj is BrowserErrorResult {
+  return obj && obj.success === false && typeof obj.error === "string";
+}
+
+export interface BrowserErrorResult {
+  success: false;
+  error: string;
+}

@@ -24,7 +24,7 @@ export class GBoxClient {
     this.config = config;
     const baseURL = config.baseURL || DEFAULT_BASE_URL;
     const timeout = config.timeout || DEFAULT_TIMEOUT;
-    const useLogger = config.logger === false ? false : (config.logger || undefined);
+    const useLogger = config.logger;
 
     this.httpClient = axios.create({
       baseURL,
@@ -45,4 +45,4 @@ export class GBoxClient {
   }
 
   // Add any client-level methods if necessary
-} 
+}

@@ -23,7 +23,13 @@ export interface VolumeMount {
   source: string;
   target: string;
   readOnly?: boolean;
-  propagation?: 'private' | 'rprivate' | 'shared' | 'rshared' | 'slave' | 'rslave';
+  propagation?:
+    | 'private'
+    | 'rprivate'
+    | 'shared'
+    | 'rshared'
+    | 'slave'
+    | 'rslave';
 }
 
 // Response structure for listing boxes
@@ -49,6 +55,15 @@ export interface BoxListFilters {
 export interface BoxRunCommand {
   cmd: string[]; // First element is command, rest are args (mirroring Python API)
   // Add options like user, tty if supported by API
+}
+
+// Options for running a command in a box
+export interface BoxRunOptions {
+  stdin?: string;
+  stdoutLineLimit?: number;
+  stderrLineLimit?: number;
+  signal?: AbortSignal;
+  sessionId?: string;
 }
 
 // Response structure for running a command
@@ -77,6 +92,6 @@ export interface BoxReclaimResponse {
 
 // Response type for extracting an archive (PUT)
 export interface BoxExtractArchiveResponse {
-    message: string; // Assuming a success message
-    // Add other fields if the API returns more
-} 
+  message: string; // Assuming a success message
+  // Add other fields if the API returns more
+}

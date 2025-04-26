@@ -1,4 +1,4 @@
-import type { Logger } from "./sdk/types";
+import type { Logger } from "./service/gbox.instance.js";
 import type { LogFn } from "./types";
 
 export class MCPLogger implements Logger {

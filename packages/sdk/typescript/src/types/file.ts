@@ -11,15 +11,19 @@ export interface FileInfo {
   // Add other potential fields from API like linkTarget if needed
 }
 
-// Removed FileInfoResponse as info comes from header
-
-// Removed ShareFromBoxParams (now arguments to share method)
-
 // Response structure for the share operation (POST /api/v1/files?operation=share)
 export interface FileShareApiResponse {
-    success?: boolean;
-    message?: string;
-    fileList?: FileInfo[]; // Based on Python doc example
+  success?: boolean;
+  message?: string;
+  fileList?: FileInfo[]; // Based on Python doc example
+}
+
+// Response structure for the write operation (POST /api/v1/files?operation=write)
+// Although structurally identical to FileShareApiResponse now, define separately for clarity.
+export interface FileWriteApiResponse {
+  success?: boolean;
+  message?: string;
+  fileList?: FileInfo[];
 }
 
 // Removed ShareResponse
@@ -30,4 +34,4 @@ export interface FileReclaimApiResponse {
   errors?: string[];
 }
 
-// Removed FilesReclaimResponse 
+// Removed FilesReclaimResponse

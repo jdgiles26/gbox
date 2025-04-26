@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/playwright-community/playwright-go"
 	// Removed uuid, browser imports as they are used in other files
@@ -127,56 +129,143 @@ func (s *BrowserService) getOrCreateManagedBrowser(boxID string) (*ManagedBrowse
 		return nil, fmt.Errorf("playwright instance is not initialized")
 	}
 
+	// --- Check cache first (Read Lock) ---
 	s.mu.RLock()
 	mb, exists := s.managedBrowsers[boxID]
 	s.mu.RUnlock()
 	if exists && mb.Instance != nil && mb.Instance.IsConnected() {
+		fmt.Printf("DEBUG: Reusing existing connected browser instance for box %s\n", boxID)
 		return mb, nil
 	}
 
+	// --- Need to connect or reconnect (Full Lock) ---
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Double-check cache after acquiring write lock
 	mb, exists = s.managedBrowsers[boxID]
 	if exists && mb.Instance != nil && mb.Instance.IsConnected() {
+		fmt.Printf("DEBUG: Reusing existing connected browser instance for box %s (double check)\n", boxID)
 		return mb, nil
 	}
 
-	// If entry exists but disconnected, clear its old contexts/pages first (defensive)
+	// If entry exists but disconnected, clear its old state first
 	if exists {
-		s.cleanupManagedBrowser_locked(mb)
+		fmt.Printf("INFO: Cleaning up disconnected browser state for box %s before reconnecting\n", boxID)
+		s.cleanupManagedBrowser_locked(mb) // Ensures old contexts/pages are cleared
 	}
 
-	portInt, err := s.boxManager.GetExternalPort(context.Background(), boxID, 3000)
+	// --- Get Connection Details ---
+	// Assuming internal port 3000 needs mapping
+	// TODO: Make internal port configurable if needed
+	// Get internal port from config instead of hardcoding
+	internalPort := config.GetInstance().Browser.InternalPort
+	if internalPort <= 0 {
+		internalPort = 3000 // Fallback just in case config is invalid
+		fmt.Printf("WARN: Invalid internal port configured (%d), falling back to default 3000 for box %s\n", config.GetInstance().Browser.InternalPort, boxID)
+	}
+	portInt, err := s.boxManager.GetExternalPort(context.Background(), boxID, internalPort)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get external port for box %s: %w", boxID, err)
+		return nil, fmt.Errorf("ERROR: failed to get external port mapping for internal port %d in box %s: %w", internalPort, boxID, err)
+	}
+	portStr := strconv.Itoa(portInt)
+	// Use configured host, default if empty (e.g., "localhost")
+	host := config.GetInstance().Browser.Host
+	if host == "" {
+		host = "localhost" // Default to localhost if config is empty
+		fmt.Printf("WARN: Browser host config is empty, defaulting to 'localhost' for box %s\n", boxID)
 	}
 
-	portStr := strconv.Itoa(portInt)
-	host := config.GetInstance().Browser.Host
-
-	launchOptions := `{"channel":"chromium"}`
+	// TODO: Make launch options configurable if needed
+	launchOptions := `{"channel":"chromium"}` // Keeping default as chromium
 	encodedOptions := url.QueryEscape(launchOptions)
 	endpointURL := fmt.Sprintf("ws://%s:%s?launch-options=%s", host, portStr, encodedOptions)
-	fmt.Printf("INFO: Connecting to Playwright endpoint: %s\n", endpointURL)
+	fmt.Printf("INFO: Preparing to connect to Playwright endpoint: %s for box %s\n", endpointURL, boxID)
 
-	browserInstance, err := s.pw.Chromium.Connect(endpointURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to browser driver at %s for box %s: %w", endpointURL, boxID, err)
+	// --- Connection Attempt with Retry Logic ---
+	var browserInstance playwright.Browser
+	var connectErr error
+	maxRetries := 3              // Max number of connection attempts
+	retryDelay := 4 * time.Second // Delay between retries
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		// Check Box status BEFORE each attempt (Crucial!)
+		// Use a short timeout for status check context
+		statusCtx, cancelStatus := context.WithTimeout(context.Background(), 5*time.Second)
+		// *** Use the Get method from the interface ***
+		boxInfo, statusErr := s.boxManager.Get(statusCtx, boxID) // Changed to Get
+		cancelStatus()                                           // Release context resources promptly
+
+		if statusErr != nil {
+			// If we can't even get the status, abort connection attempts
+			// Handle specific errors like NotFound if needed
+			// if errors.Is(statusErr, boxSvc.ErrNotFound) { ... }
+			return nil, fmt.Errorf("failed to get box info for %s before connect attempt %d: %w", boxID, attempt+1, statusErr)
+		}
+		// *** Access the Status field (assuming it exists and is string) ***
+		if boxInfo.Status != "running" { // Use constant if available, e.g., model.BoxStatusRunning
+			// Box is not running, no point in trying to connect
+			return nil, fmt.Errorf("box %s is not running (status: %s), cannot connect to Playwright", boxID, boxInfo.Status)
+		}
+
+		// Attempt the actual connection
+		// Set timeout via options, not context
+		connectTimeout := float64(15000) // 15 seconds in milliseconds
+		browserInstance, connectErr = s.pw.Chromium.Connect(endpointURL, playwright.BrowserTypeConnectOptions{
+			Timeout: &connectTimeout,
+		})
+
+		if connectErr == nil {
+			// Success!
+			fmt.Printf("INFO: Successfully connected to Playwright in box %s on attempt %d\n", boxID, attempt+1)
+			break // Exit retry loop
+		}
+
+		// Connection failed, analyze error for retry eligibility
+		errMsg := strings.ToLower(connectErr.Error()) // Lowercase for robust checking
+		isRetryableError := strings.Contains(errMsg, "connection refused") ||
+			strings.Contains(errMsg, "context deadline exceeded") || // Playwright-go often uses this for timeouts
+			strings.Contains(errMsg, "socket hang up") ||
+			strings.Contains(errMsg, "websocket: bad handshake") || // Can happen during startup
+			strings.Contains(errMsg, "reset by peer") ||
+			strings.Contains(errMsg, "network is unreachable") // Less likely but possible transient issue
+
+		if isRetryableError && attempt < maxRetries-1 {
+			fmt.Printf("INFO: Connection attempt %d/%d to Playwright in box %s failed (retryable: %v): %v. Retrying in %v...\n",
+				attempt+1, maxRetries, boxID, isRetryableError, connectErr, retryDelay)
+			time.Sleep(retryDelay)
+			continue // Go to next attempt
+		} else {
+			// Non-retryable error OR last attempt failed
+			fmt.Printf("ERROR: Final connection attempt %d/%d to Playwright in box %s failed (retryable: %v): %v. Giving up.\n",
+				attempt+1, maxRetries, boxID, isRetryableError, connectErr)
+			break // Exit loop, connectErr holds the last error
+		}
 	}
 
+	// Check final error after the loop
+	if connectErr != nil {
+		// Optional: Could perform cleanup like handleBrowserDisconnect here if needed,
+		// but the caller or subsequent operations might handle it anyway.
+		return nil, fmt.Errorf("failed to connect to Playwright in box %s after %d attempts: %w", boxID, maxRetries, connectErr)
+	}
+
+	// --- Connection Successful - Create and Store ManagedBrowser ---
 	mb = &ManagedBrowser{
 		BoxID:    boxID,
 		Instance: browserInstance,
 		Contexts: make(map[string]*ManagedContext),
+		// mu: initialized by make
 	}
 	s.managedBrowsers[boxID] = mb
 
+	// Setup disconnect handler for the new instance
 	browserInstance.Once("disconnected", func() {
 		fmt.Printf("INFO: Browser disconnected event for box %s\n", boxID)
-		s.handleBrowserDisconnect(boxID)
+		s.handleBrowserDisconnect(boxID) // Use the existing handler
 	})
 
+	fmt.Printf("INFO: Managed browser instance created and stored for box %s\n", boxID)
 	return mb, nil
 }
 
