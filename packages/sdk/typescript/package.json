@@ -1,5 +1,5 @@
 {
-  "name": "@gru/node-gbox",
+  "name": "@gru.ai/gbox",
   "version": "0.0.1",
   "description": "Node.js SDK for Gru gbox. Gbox provides a self-hostable sandbox environment designed for AI agents, offering capabilities like terminal access, file management, and browser interaction. \nThis SDK allows Node.js applications to programmatically manage GBox resources, primarily the execution environments (Boxes) and the shared file volume, enabling seamless integration with agent workflows.",
   "type": "module",
@@ -12,13 +12,25 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsup",
     "dev": "tsc --watch",
     "lint": "eslint . --ext .ts",
     "test": "vitest run",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "start:demo": "tsx demo.ts",
+    "start:browser-demo": "tsx browser_demo.ts",
+    "format:check": "prettier --check .",
+    "format:fix": "prettier --write ."
   },
-  "keywords": ["gru", "gbox", "self-hosted", "sandbox", "ai", "agent", "mcp"],
+  "keywords": [
+    "gru",
+    "gbox",
+    "self-hosted",
+    "sandbox",
+    "ai",
+    "agent",
+    "mcp"
+  ],
   "author": "gru.ai",
   "license": "Apache-2.0",
   "repository": {

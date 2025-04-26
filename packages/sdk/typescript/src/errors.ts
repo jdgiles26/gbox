@@ -39,4 +39,4 @@ export class ConflictError extends APIError {
   }
 }
 
-// Add other specific error types as needed (e.g., ValidationError, AuthenticationError) 
+// Add other specific error types as needed (e.g., ValidationError, AuthenticationError)

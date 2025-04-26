@@ -2,7 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BoxManager } from '../../src/managers/boxManager.ts';
 import { Box } from '../../src/models/box.ts';
 import { BoxApi } from '../../src/api/boxApi.ts';
-import type { BoxData, BoxListFilters, BoxCreateOptions, BoxesDeleteResponse, BoxReclaimResponse } from '../../src/types/box.ts';
+import type {
+  BoxData,
+  BoxListFilters,
+  BoxCreateOptions,
+  BoxesDeleteResponse,
+  BoxReclaimResponse,
+} from '../../src/types/box.ts';
 import { NotFoundError } from '../../src/errors.ts';
 
 // Mock BoxApi methods
@@ -24,7 +30,7 @@ vi.mock('../../src/api/boxApi.ts', () => {
         reclaim: mockBoxApiReclaim,
         // Add other BoxApi methods used by Box model if necessary
       };
-    })
+    }),
   };
 });
 
@@ -80,8 +86,16 @@ describe('BoxManager', () => {
       expect(mockBoxApiList).toHaveBeenCalledWith(undefined); // No filters
       expect(boxes).toHaveLength(2);
       expect(Box).toHaveBeenCalledTimes(2);
-      expect(Box).toHaveBeenNthCalledWith(1, mockRawBoxes[0], mockBoxApiInstance);
-      expect(Box).toHaveBeenNthCalledWith(2, mockRawBoxes[1], mockBoxApiInstance);
+      expect(Box).toHaveBeenNthCalledWith(
+        1,
+        mockRawBoxes[0],
+        mockBoxApiInstance
+      );
+      expect(Box).toHaveBeenNthCalledWith(
+        2,
+        mockRawBoxes[1],
+        mockBoxApiInstance
+      );
       // Optionally check properties of the returned (mocked) Box instances
       expect((boxes[0] as any).id).toBe('box1');
       expect((boxes[1] as any).id).toBe('box2');
@@ -90,7 +104,12 @@ describe('BoxManager', () => {
     it('should list boxes with filters', async () => {
       const filters: BoxListFilters = { label: ['env=prod'] };
       const mockRawBoxes: BoxData[] = [
-        { id: 'box3', status: 'running', image: 'img3', labels: { 'env': 'prod' } },
+        {
+          id: 'box3',
+          status: 'running',
+          image: 'img3',
+          labels: { env: 'prod' },
+        },
       ];
       mockBoxApiList.mockResolvedValue({ boxes: mockRawBoxes });
 
@@ -107,7 +126,11 @@ describe('BoxManager', () => {
   describe('get', () => {
     it('should get a specific box and wrap it in a Box model', async () => {
       const boxId = 'box123';
-      const mockRawBox: BoxData = { id: boxId, status: 'running', image: 'img1' };
+      const mockRawBox: BoxData = {
+        id: boxId,
+        status: 'running',
+        image: 'img1',
+      };
       mockBoxApiGetDetails.mockResolvedValue(mockRawBox);
 
       const box = await boxManager.get(boxId);
@@ -132,9 +155,17 @@ describe('BoxManager', () => {
 
   describe('create', () => {
     it('should create a box and wrap the response in a Box model', async () => {
-      const options: BoxCreateOptions = { image: 'new-image', labels: { 'a': 'b' } };
+      const options: BoxCreateOptions = {
+        image: 'new-image',
+        labels: { a: 'b' },
+      };
       // Mock the response from boxApi.create (which is BoxData)
-      const mockApiResponse: BoxData = { id: 'newBoxId', image: 'new-image', status: 'created', labels: { 'a': 'b' } };
+      const mockApiResponse: BoxData = {
+        id: 'newBoxId',
+        image: 'new-image',
+        status: 'created',
+        labels: { a: 'b' },
+      };
       mockBoxApiCreate.mockResolvedValue(mockApiResponse);
 
       const box = await boxManager.create(options);
@@ -149,7 +180,11 @@ describe('BoxManager', () => {
 
   describe('deleteAll', () => {
     it('should call boxApi.deleteAll without force', async () => {
-      const mockResponse: BoxesDeleteResponse = { count: 2, ids: ['id1', 'id2'], message: 'Deleted' };
+      const mockResponse: BoxesDeleteResponse = {
+        count: 2,
+        ids: ['id1', 'id2'],
+        message: 'Deleted',
+      };
       mockBoxApiDeleteAll.mockResolvedValue(mockResponse);
 
       const result = await boxManager.deleteAll(); // Default force is false
@@ -159,7 +194,11 @@ describe('BoxManager', () => {
     });
 
     it('should call boxApi.deleteAll with force=true', async () => {
-      const mockResponse: BoxesDeleteResponse = { count: 1, ids: ['id3'], message: 'Force deleted' };
+      const mockResponse: BoxesDeleteResponse = {
+        count: 1,
+        ids: ['id3'],
+        message: 'Force deleted',
+      };
       mockBoxApiDeleteAll.mockResolvedValue(mockResponse);
 
       const result = await boxManager.deleteAll(true);
@@ -171,7 +210,10 @@ describe('BoxManager', () => {
 
   describe('reclaim', () => {
     it('should call boxApi.reclaim for all boxes without force', async () => {
-      const mockResponse: BoxReclaimResponse = { deletedIds: ['id1'], message: 'Reclaimed' };
+      const mockResponse: BoxReclaimResponse = {
+        deletedIds: ['id1'],
+        message: 'Reclaimed',
+      };
       mockBoxApiReclaim.mockResolvedValue(mockResponse);
 
       const result = await boxManager.reclaim(); // Default force is false
@@ -182,7 +224,10 @@ describe('BoxManager', () => {
     });
 
     it('should call boxApi.reclaim for all boxes with force=true', async () => {
-      const mockResponse: BoxReclaimResponse = { deletedIds: ['id2'], message: 'Force reclaimed' };
+      const mockResponse: BoxReclaimResponse = {
+        deletedIds: ['id2'],
+        message: 'Force reclaimed',
+      };
       mockBoxApiReclaim.mockResolvedValue(mockResponse);
 
       const result = await boxManager.reclaim(true);
@@ -192,5 +237,4 @@ describe('BoxManager', () => {
       expect(result).toEqual(mockResponse);
     });
   });
-
-}); 
+});

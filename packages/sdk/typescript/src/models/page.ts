@@ -1,14 +1,22 @@
 import { BrowserApi } from '../api/browser.api.ts';
 import type {
   GetPageResult,
-  VisionClickParams, VisionClickResult,
-  VisionDoubleClickParams, VisionDoubleClickResult,
-  VisionDragParams, VisionDragResult,
-  VisionKeyPressParams, VisionKeyPressResult,
-  VisionMoveParams, VisionMoveResult,
-  VisionScreenshotParams, VisionScreenshotResult,
-  VisionScrollParams, VisionScrollResult,
-  VisionTypeParams, VisionTypeResult
+  VisionClickParams,
+  VisionClickResult,
+  VisionDoubleClickParams,
+  VisionDoubleClickResult,
+  VisionDragParams,
+  VisionDragResult,
+  VisionKeyPressParams,
+  VisionKeyPressResult,
+  VisionMoveParams,
+  VisionMoveResult,
+  VisionScreenshotParams,
+  VisionScreenshotResult,
+  VisionScrollParams,
+  VisionScrollResult,
+  VisionTypeParams,
+  VisionTypeResult,
 } from '../types/browser.ts';
 
 /**
@@ -39,91 +47,172 @@ export class BrowserPage {
   /**
    * Retrieves the content of the page.
    * @param contentType - The desired format of the content ('html' or 'markdown'). Defaults to 'html'.
+   * @param signal An optional AbortSignal to cancel the operation.
    * @returns A promise that resolves with the page details and content.
    */
-  async getContent(contentType: 'html' | 'markdown' = 'html'): Promise<GetPageResult> {
-    return await this.api.getPage(this.boxId, this.contextId, this.id, true, contentType);
+  async getContent(
+    contentType: 'html' | 'markdown' = 'html',
+    signal?: AbortSignal
+  ): Promise<GetPageResult> {
+    return await this.api.getPage(
+      this.boxId,
+      this.contextId,
+      this.id,
+      true,
+      contentType,
+      signal
+    );
   }
 
   /**
    * Performs a click action on the page based on visual context.
    * @param params - Parameters for the click action (e.g., description of the element to click).
+   * @param signal An optional AbortSignal to cancel the operation.
    * @returns A promise that resolves with the result of the click action.
    */
-  async click(params: VisionClickParams): Promise<VisionClickResult> {
-    return await this.api.visionClick(this.boxId, this.contextId, this.id, params);
+  async click(
+    params: VisionClickParams,
+    signal?: AbortSignal
+  ): Promise<VisionClickResult> {
+    return await this.api.visionClick(
+      this.boxId,
+      this.contextId,
+      this.id,
+      params,
+      signal
+    );
   }
 
   /**
    * Performs a double click action on the page based on visual context.
    * @param params - Parameters for the double click action.
+   * @param signal An optional AbortSignal to cancel the operation.
    * @returns A promise that resolves with the result of the double click action.
    */
-   async doubleClick(params: VisionDoubleClickParams): Promise<VisionDoubleClickResult> {
-    return await this.api.visionDoubleClick(this.boxId, this.contextId, this.id, params);
+  async doubleClick(
+    params: VisionDoubleClickParams,
+    signal?: AbortSignal
+  ): Promise<VisionDoubleClickResult> {
+    return await this.api.visionDoubleClick(
+      this.boxId,
+      this.contextId,
+      this.id,
+      params,
+      signal
+    );
   }
 
   /**
    * Types text into the page based on visual context or a selector.
    * @param params - Parameters for the type action (e.g., text to type, target element description).
+   * @param signal An optional AbortSignal to cancel the operation.
    * @returns A promise that resolves with the result of the type action.
    */
-  async type(params: VisionTypeParams): Promise<VisionTypeResult> {
-    return await this.api.visionType(this.boxId, this.contextId, this.id, params);
+  async type(
+    params: VisionTypeParams,
+    signal?: AbortSignal
+  ): Promise<VisionTypeResult> {
+    return await this.api.visionType(
+      this.boxId,
+      this.contextId,
+      this.id,
+      params,
+      signal
+    );
   }
 
-   /**
+  /**
    * Performs a drag action on the page based on visual context.
    * @param params - Parameters for the drag action (start and end points/descriptions).
+   * @param signal An optional AbortSignal to cancel the operation.
    * @returns A promise that resolves with the result of the drag action.
    */
-  async drag(params: VisionDragParams): Promise<VisionDragResult> {
-    return await this.api.visionDrag(this.boxId, this.contextId, this.id, params);
+  async drag(
+    params: VisionDragParams,
+    signal?: AbortSignal
+  ): Promise<VisionDragResult> {
+    return await this.api.visionDrag(
+      this.boxId,
+      this.contextId,
+      this.id,
+      params,
+      signal
+    );
   }
 
   /**
    * Simulates a key press action on the page.
    * @param params - Parameters for the key press action (e.g., the key to press).
+   * @param signal An optional AbortSignal to cancel the operation.
    * @returns A promise that resolves with the result of the key press action.
    */
-  async keyPress(params: VisionKeyPressParams): Promise<VisionKeyPressResult> {
-    return await this.api.visionKeyPress(this.boxId, this.contextId, this.id, params);
+  async keyPress(
+    params: VisionKeyPressParams,
+    signal?: AbortSignal
+  ): Promise<VisionKeyPressResult> {
+    return await this.api.visionKeyPress(
+      this.boxId,
+      this.contextId,
+      this.id,
+      params,
+      signal
+    );
   }
 
   /**
    * Moves the mouse cursor on the page based on visual context.
    * @param params - Parameters for the move action (target description or coordinates).
+   * @param signal An optional AbortSignal to cancel the operation.
    * @returns A promise that resolves with the result of the move action.
    */
-  async move(params: VisionMoveParams): Promise<VisionMoveResult> {
-    return await this.api.visionMove(this.boxId, this.contextId, this.id, params);
+  async move(
+    params: VisionMoveParams,
+    signal?: AbortSignal
+  ): Promise<VisionMoveResult> {
+    return await this.api.visionMove(
+      this.boxId,
+      this.contextId,
+      this.id,
+      params,
+      signal
+    );
   }
 
   /**
    * Takes a screenshot of the page based on visual context.
    * @param params - Parameters for the screenshot action (e.g., area description).
+   * @param signal An optional AbortSignal to cancel the operation.
    * @returns A promise that resolves with the screenshot result (often includes image data).
    */
-  async screenshot(params: VisionScreenshotParams): Promise<VisionScreenshotResult> {
-    return await this.api.visionScreenshot(this.boxId, this.contextId, this.id, params);
+  async screenshot(
+    params: VisionScreenshotParams,
+    signal?: AbortSignal
+  ): Promise<VisionScreenshotResult> {
+    return await this.api.visionScreenshot(
+      this.boxId,
+      this.contextId,
+      this.id,
+      params,
+      signal
+    );
   }
-
 
   /**
    * Scrolls the page based on visual context or direction.
    * @param params - Parameters for the scroll action (e.g., direction, amount, target element).
+   * @param signal An optional AbortSignal to cancel the operation.
    * @returns A promise that resolves with the result of the scroll action.
    */
-  async scroll(params: VisionScrollParams): Promise<VisionScrollResult> {
-    return await this.api.visionScroll(this.boxId, this.contextId, this.id, params);
+  async scroll(
+    params: VisionScrollParams,
+    signal?: AbortSignal
+  ): Promise<VisionScrollResult> {
+    return await this.api.visionScroll(
+      this.boxId,
+      this.contextId,
+      this.id,
+      params,
+      signal
+    );
   }
-
-
-  /**
-   * Closes this specific browser page.
-   * @returns A promise that resolves when the page has been closed.
-   */
-  async close(): Promise<void> {
-    await this.api.closePage(this.boxId, this.contextId, this.id);
-  }
-} 
+}

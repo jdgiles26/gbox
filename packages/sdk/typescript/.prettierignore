@@ -1,0 +1,12 @@
+# Build output
+dist
+lib
+
+# Dependencies
+node_modules
+
+# Lock file
+pnpm-lock.yaml
+
+# Generated files (if any)
+# *.generated.ts 

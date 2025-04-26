@@ -2,7 +2,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import type { ListResourcesResult } from "@modelcontextprotocol/sdk/types.js";
-import type { Logger } from "./sdk/types";
+import type { Logger } from "./service/gbox.instance.js";
 
 // Change LogFunction type to Logger interface
 export type LogFunction = Logger;

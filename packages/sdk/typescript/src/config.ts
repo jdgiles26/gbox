@@ -12,6 +12,6 @@ export const DEFAULT_TIMEOUT = 60000; // 60 seconds in milliseconds
 export interface GBoxClientConfig {
   baseURL?: string;
   timeout?: number;
-  logger?: Logger | false; // Allow passing a logger instance or disabling logging
+  logger?: Logger;
   // Add other configuration options as needed, e.g., custom logger, headers
-} 
+}

@@ -22,51 +22,101 @@ import type {
   VisionScrollParams,
   VisionScrollResult,
   VisionTypeParams,
-  VisionTypeResult
+  VisionTypeResult,
 } from '../types/browser.ts';
 
 const API_PREFIX = '/api/v1';
 
 export class BrowserApi extends Client {
-  
   /**
    * Creates a browser context.
    * POST /api/v1/boxes/{id}/browser-contexts
    */
-  async createContext(boxId: string, params: CreateContextParams): Promise<CreateContextResult> {
-    return super.post<CreateContextResult>(`${API_PREFIX}/boxes/${boxId}/browser-contexts`, params);
+  async createContext(
+    boxId: string,
+    params: CreateContextParams,
+    signal?: AbortSignal
+  ): Promise<CreateContextResult> {
+    return await super.post<CreateContextResult>(
+      `${API_PREFIX}/boxes/${boxId}/browser-contexts`,
+      params,
+      undefined,
+      undefined,
+      signal
+    );
   }
 
   /**
    * Closes a browser context.
    * DELETE /api/v1/boxes/{id}/browser-contexts/{context_id}
    */
-  async closeContext(boxId: string, contextId: string): Promise<void> {
-    return super.delete(`${API_PREFIX}/boxes/${boxId}/browser-contexts/${contextId}`);
+  async closeContext(
+    boxId: string,
+    contextId: string,
+    signal?: AbortSignal
+  ): Promise<void> {
+    return await super.delete(
+      `${API_PREFIX}/boxes/${boxId}/browser-contexts/${contextId}`,
+      undefined,
+      undefined,
+      undefined,
+      signal
+    );
   }
 
   /**
    * Creates a new page and navigates to URL.
    * POST /api/v1/boxes/{id}/browser-contexts/{context_id}/pages
    */
-  async createPage(boxId: string, contextId: string, params: CreatePageParams): Promise<CreatePageResult> {
-    return super.post<CreatePageResult>(`${API_PREFIX}/boxes/${boxId}/browser-contexts/${contextId}/pages`, params);
+  async createPage(
+    boxId: string,
+    contextId: string,
+    params: CreatePageParams,
+    signal?: AbortSignal
+  ): Promise<CreatePageResult> {
+    return await super.post<CreatePageResult>(
+      `${API_PREFIX}/boxes/${boxId}/browser-contexts/${contextId}/pages`,
+      params,
+      undefined,
+      undefined,
+      signal
+    );
   }
 
   /**
    * Lists all pages in a context.
    * GET /api/v1/boxes/{id}/browser-contexts/{context_id}/pages
    */
-  async listPages(boxId: string, contextId: string): Promise<ListPagesResult> {
-    return super.get<ListPagesResult>(`${API_PREFIX}/boxes/${boxId}/browser-contexts/${contextId}/pages`);
+  async listPages(
+    boxId: string,
+    contextId: string,
+    signal?: AbortSignal
+  ): Promise<ListPagesResult> {
+    return await super.get<ListPagesResult>(
+      `${API_PREFIX}/boxes/${boxId}/browser-contexts/${contextId}/pages`,
+      undefined,
+      undefined,
+      signal
+    );
   }
 
   /**
    * Closes a page.
    * DELETE /api/v1/boxes/{id}/browser-contexts/{context_id}/pages/{page_id}
    */
-  async closePage(boxId: string, contextId: string, pageId: string): Promise<void> {
-    return super.delete(`${API_PREFIX}/boxes/${boxId}/browser-contexts/${contextId}/pages/${pageId}`);
+  async closePage(
+    boxId: string,
+    contextId: string,
+    pageId: string,
+    signal?: AbortSignal
+  ): Promise<void> {
+    return await super.delete(
+      `${API_PREFIX}/boxes/${boxId}/browser-contexts/${contextId}/pages/${pageId}`,
+      undefined,
+      undefined,
+      undefined,
+      signal
+    );
   }
 
   /**
@@ -74,19 +124,22 @@ export class BrowserApi extends Client {
    * GET /api/v1/boxes/{id}/browser-contexts/{context_id}/pages/{page_id}
    */
   async getPage(
-    boxId: string, 
-    contextId: string, 
-    pageId: string, 
+    boxId: string,
+    contextId: string,
+    pageId: string,
     withContent: boolean = false,
-    contentType: 'html' | 'markdown' = 'html'
+    contentType: 'html' | 'markdown' = 'html',
+    signal?: AbortSignal
   ): Promise<GetPageResult> {
     const params = {
       withContent: withContent.toString(),
-      contentType
+      contentType,
     };
-    return super.get<GetPageResult>(
+    return await super.get<GetPageResult>(
       `${API_PREFIX}/boxes/${boxId}/browser-contexts/${contextId}/pages/${pageId}`,
-      params
+      params,
+      undefined,
+      signal
     );
   }
 
@@ -100,11 +153,15 @@ export class BrowserApi extends Client {
     boxId: string,
     contextId: string,
     pageId: string,
-    params: VisionClickParams
+    params: VisionClickParams,
+    signal?: AbortSignal
   ): Promise<VisionClickResult> {
-    return super.post<VisionClickResult>(
+    return await super.post<VisionClickResult>(
       `${API_PREFIX}/boxes/${boxId}/browser-contexts/${contextId}/pages/${pageId}/actions/vision-click`,
-      params
+      params,
+      undefined,
+      undefined,
+      signal
     );
   }
 
@@ -116,11 +173,15 @@ export class BrowserApi extends Client {
     boxId: string,
     contextId: string,
     pageId: string,
-    params: VisionDoubleClickParams
+    params: VisionDoubleClickParams,
+    signal?: AbortSignal
   ): Promise<VisionDoubleClickResult> {
-    return super.post<VisionDoubleClickResult>(
+    return await super.post<VisionDoubleClickResult>(
       `${API_PREFIX}/boxes/${boxId}/browser-contexts/${contextId}/pages/${pageId}/actions/vision-doubleClick`,
-      params
+      params,
+      undefined,
+      undefined,
+      signal
     );
   }
 
@@ -132,11 +193,15 @@ export class BrowserApi extends Client {
     boxId: string,
     contextId: string,
     pageId: string,
-    params: VisionTypeParams
+    params: VisionTypeParams,
+    signal?: AbortSignal
   ): Promise<VisionTypeResult> {
-    return super.post<VisionTypeResult>(
+    return await super.post<VisionTypeResult>(
       `${API_PREFIX}/boxes/${boxId}/browser-contexts/${contextId}/pages/${pageId}/actions/vision-type`,
-      params
+      params,
+      undefined,
+      undefined,
+      signal
     );
   }
 
@@ -148,11 +213,15 @@ export class BrowserApi extends Client {
     boxId: string,
     contextId: string,
     pageId: string,
-    params: VisionDragParams
+    params: VisionDragParams,
+    signal?: AbortSignal
   ): Promise<VisionDragResult> {
-    return super.post<VisionDragResult>(
+    return await super.post<VisionDragResult>(
       `${API_PREFIX}/boxes/${boxId}/browser-contexts/${contextId}/pages/${pageId}/actions/vision-drag`,
-      params
+      params,
+      undefined,
+      undefined,
+      signal
     );
   }
 
@@ -164,11 +233,15 @@ export class BrowserApi extends Client {
     boxId: string,
     contextId: string,
     pageId: string,
-    params: VisionKeyPressParams
+    params: VisionKeyPressParams,
+    signal?: AbortSignal
   ): Promise<VisionKeyPressResult> {
-    return super.post<VisionKeyPressResult>(
+    return await super.post<VisionKeyPressResult>(
       `${API_PREFIX}/boxes/${boxId}/browser-contexts/${contextId}/pages/${pageId}/actions/vision-keyPress`,
-      params
+      params,
+      undefined,
+      undefined,
+      signal
     );
   }
 
@@ -180,11 +253,15 @@ export class BrowserApi extends Client {
     boxId: string,
     contextId: string,
     pageId: string,
-    params: VisionMoveParams
+    params: VisionMoveParams,
+    signal?: AbortSignal
   ): Promise<VisionMoveResult> {
-    return super.post<VisionMoveResult>(
+    return await super.post<VisionMoveResult>(
       `${API_PREFIX}/boxes/${boxId}/browser-contexts/${contextId}/pages/${pageId}/actions/vision-move`,
-      params
+      params,
+      undefined,
+      undefined,
+      signal
     );
   }
 
@@ -196,11 +273,15 @@ export class BrowserApi extends Client {
     boxId: string,
     contextId: string,
     pageId: string,
-    params: VisionScreenshotParams
+    params: VisionScreenshotParams,
+    signal?: AbortSignal
   ): Promise<VisionScreenshotResult> {
-    return super.post<VisionScreenshotResult>(
+    return await super.post<VisionScreenshotResult>(
       `${API_PREFIX}/boxes/${boxId}/browser-contexts/${contextId}/pages/${pageId}/actions/vision-screenshot`,
-      params
+      params,
+      undefined,
+      undefined,
+      signal
     );
   }
 
@@ -212,11 +293,15 @@ export class BrowserApi extends Client {
     boxId: string,
     contextId: string,
     pageId: string,
-    params: VisionScrollParams
+    params: VisionScrollParams,
+    signal?: AbortSignal
   ): Promise<VisionScrollResult> {
-    return super.post<VisionScrollResult>(
+    return await super.post<VisionScrollResult>(
       `${API_PREFIX}/boxes/${boxId}/browser-contexts/${contextId}/pages/${pageId}/actions/vision-scroll`,
-      params
+      params,
+      undefined,
+      undefined,
+      signal
     );
   }
 }

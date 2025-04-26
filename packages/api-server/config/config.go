@@ -62,7 +62,8 @@ type K8sConfig struct {
 
 // BrowserConfig represents browser service specific configuration
 type BrowserConfig struct {
-	Host string `yaml:"host"`
+	Host         string `yaml:"host"`
+	InternalPort int    `yaml:"internal_port"`
 }
 
 func init() {
@@ -81,6 +82,7 @@ func init() {
 	v.BindEnv("file.host_share", "GBOX_HOST_SHARE")
 	v.BindEnv("cluster.namespace", "GBOX_NAMESPACE")
 	v.BindEnv("browser.host", "GBOX_BROWSER_HOST")
+	v.BindEnv("browser.internalport", "GBOX_BROWSER_INTERNAL_PORT")
 
 	// Image environment variables (bound to dynamically generated keys)
 	v.BindEnv("gbox.python.img.tag", "PY_IMG_TAG")
@@ -269,7 +271,8 @@ func New() (*Config, error) {
 			},
 		},
 		Browser: BrowserConfig{
-			Host: "localhost",
+			Host:         "localhost",
+			InternalPort: 3000,
 		},
 	}
 
