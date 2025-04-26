@@ -11,8 +11,7 @@
         "rootDir": ".."
     },
     "include": [
-        "src/**/*",
-        "../sdk/typescript/src/**/*"
+        "src/**/*"
     ],
     "exclude": [
         "node_modules",

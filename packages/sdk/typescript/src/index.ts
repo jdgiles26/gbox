@@ -21,8 +21,8 @@ export { Box } from './models/box.ts';
 export { GBoxFile } from './models/file.ts';
 export { BrowserContext } from './models/context.ts';
 export { BrowserPage } from './models/page.ts';
-export { BoxBrowserManager } from './managers/browser.manager';
-export { FileManager } from './managers/file.manager';
+export { BoxBrowserManager } from './managers/browser.manager.ts';
+export { FileManager } from './managers/file.manager.ts';
 
 // Export new browser-related exports
 export * from './api/browser.api.ts';

@@ -1,4 +1,4 @@
-import type { Logger } from '@gru.ai/node-gbox';
+import type { Logger } from '@gru.ai/gbox';
 import {
     GBoxClient,
     Box,
@@ -15,7 +15,7 @@ import {
     BoxBrowserManager,
     FileManager,
     GBoxFile,
-} from '@gru.ai/node-gbox';
+} from '@gru.ai/gbox';
 
 const GBOX_URL = process.env.GBOX_URL || 'http://localhost:28080';
 
