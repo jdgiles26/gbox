@@ -13,6 +13,7 @@ import (
 
 	md "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 	"github.com/playwright-community/playwright-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -103,6 +104,13 @@ func (m *mockBoxService) Stop(ctx context.Context, id string) (*boxModel.BoxStop
 // Add missing Run method
 func (m *mockBoxService) Run(ctx context.Context, id string, params *boxModel.BoxRunParams) (*boxModel.BoxRunResult, error) {
 	return nil, fmt.Errorf("mockBoxService.Run not implemented")
+}
+
+// Add missing ExecWS method
+func (m *mockBoxService) ExecWS(ctx context.Context, id string, params *boxModel.BoxExecWSParams, wsConn *websocket.Conn) (*boxModel.BoxExecResult, error) {
+	// Mock behavior: Immediately close or return error as it's not implemented
+	wsConn.Close()
+	return nil, fmt.Errorf("mockBoxService.ExecWS not implemented")
 }
 
 var _ boxSvc.BoxService = (*mockBoxService)(nil)

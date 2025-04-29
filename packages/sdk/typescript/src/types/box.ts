@@ -95,3 +95,45 @@ export interface BoxExtractArchiveResponse {
   message: string; // Assuming a success message
   // Add other fields if the API returns more
 }
+
+// --- New Exec Types (Promise-based) ---
+
+// Result type for the buffered exec
+export type BoxExecResult = {
+  /** The exit code of the command. */
+  exitCode: number;
+  /** The buffered standard output as a string. */
+  stdout: string;
+  /** The buffered standard error as a string. */
+  stderr: string;
+  /** The buffered standard output as an ArrayBuffer. */
+  stdoutBuffer: ArrayBuffer;
+  /** The buffered standard error as an ArrayBuffer. */
+  stderrBuffer: ArrayBuffer;
+};
+
+/**
+ * Options for the Box.exec() method.
+ */
+export type BoxExecOptions = {
+  /** Whether to allocate a pseudo-TTY. Default: false */
+  tty?: boolean;
+  /** Optional AbortSignal to cancel the operation. */
+  signal?: AbortSignal;
+};
+
+// --- End New Exec Types ---
+
+// Stream type constants (matching backend)
+export type StreamType = 0 | 1 | 2;
+
+// Define constants for clarity, matching original enum keys
+export const StreamTypeStdin: StreamType = 0;
+export const StreamTypeStdout: StreamType = 1;
+export const StreamTypeStderr: StreamType = 2;
+
+// Structure for the final exit message from the backend
+export interface ExitMessage {
+  type: 'exit';
+  exitCode: number;
+}

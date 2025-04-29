@@ -12,7 +12,7 @@ import (
 	"github.com/docker/docker/api/types"
 
 	"github.com/babelcloud/gbox/packages/api-server/internal/common"
-	"github.com/babelcloud/gbox/packages/api-server/pkg/box"
+	model "github.com/babelcloud/gbox/packages/api-server/pkg/box"
 )
 
 // Exec implements Service.Exec

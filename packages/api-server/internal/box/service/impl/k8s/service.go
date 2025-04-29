@@ -27,6 +27,7 @@ import (
 	model "github.com/babelcloud/gbox/packages/api-server/pkg/box"
 	"github.com/babelcloud/gbox/packages/api-server/pkg/id"
 	"github.com/babelcloud/gbox/packages/api-server/pkg/logger"
+	"github.com/gorilla/websocket"
 )
 
 const (
@@ -337,8 +338,15 @@ func (s *Service) Exec(ctx context.Context, id string, req *model.BoxExecParams)
 
 // Run runs a command in a box
 func (s *Service) Run(ctx context.Context, id string, req *model.BoxRunParams) (*model.BoxRunResult, error) {
-	// TODO: Implement run operation for K8s
 	return nil, fmt.Errorf("run operation not implemented for K8s")
+}
+
+// ExecWS executes a command in a box via WebSocket (Not Implemented for K8s)
+func (s *Service) ExecWS(ctx context.Context, id string, params *model.BoxExecWSParams, wsConn *websocket.Conn) (*model.BoxExecResult, error) {
+	// Close the WebSocket immediately as K8s implementation doesn't support it
+	wsConn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseUnsupportedData, "Exec via WebSocket is not supported by the K8s driver"))
+	wsConn.Close()
+	return nil, fmt.Errorf("ExecWS is not implemented for the Kubernetes service")
 }
 
 // Start starts a stopped box

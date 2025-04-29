@@ -1,4 +1,3 @@
-import type { AxiosInstance } from 'axios';
 import { Client } from './http-client.ts';
 import type {
   BoxCreateOptions,
@@ -12,9 +11,17 @@ import type {
   BoxRunResponse,
   BoxExtractArchiveResponse,
   BoxRunOptions,
+  StreamType,
+  ExitMessage,
+  BoxExecResult,
+  BoxExecOptions,
 } from '../types/box.ts';
+import { StreamTypeStdout, StreamTypeStderr } from '../types/box.ts';
+import { WebSocketClient } from './ws-client.ts';
+
 
 const API_PREFIX = '/api/v1/boxes';
+const WS_PREFIX = '/ws/boxes';
 
 export class BoxApi extends Client {
   /**
@@ -285,14 +292,165 @@ export class BoxApi extends Client {
     );
   }
 
+  /**
+   * Execute a command in a box via WebSocket, wait for completion, and return buffered output.
+   * Connects via GET /ws/boxes/{id}/exec?cmd=...&arg=...&tty=...
+   *
+   * @param boxId The ID of the box.
+   * @param cmd The command and its arguments as an array of strings.
+   * @param options Optional settings like tty mode and abort signal.
+   * @returns A promise that resolves with the exit code, stdout/stderr strings and buffers.
+   */
+  async exec(
+    boxId: string,
+    cmd: string[],
+    options?: BoxExecOptions
+  ): Promise<BoxExecResult> {
+    const { tty = false, signal } = options ?? {};
+
+    if (!cmd || cmd.length === 0) {
+      throw new Error('cmd must be a non-empty array');
+    }
+
+    // Construct the full WebSocket URL using the helper
+    const wsUrlString = this.buildExecWsUrl(boxId, { cmd, tty });
+    this.logger.debug(`[GBox SDK exec] Constructed WebSocket URL: ${wsUrlString}`);
+
+    return new Promise<BoxExecResult>((resolve, reject) => {
+      let receivedExitCode: number | null = null;
+      const rawStdoutBuffer: ArrayBuffer[] = []; // Store raw stdout buffers
+      const rawStderrBuffer: ArrayBuffer[] = []; // Store raw stderr buffers
+      let wsClientInstance: WebSocketClient | null = null;
+      let connectionError: Error | null = null;
+
+      // Instantiate the client and connect
+      wsClientInstance = new WebSocketClient(wsUrlString, {
+        signal: signal,
+        onOpen: () => {
+          this.logger.debug('[GBox SDK exec] WebSocket connection opened.');
+          // Connection is open, waiting for messages...
+        },
+        onMessage: (data: ArrayBuffer | string) => {
+          if (typeof data === 'string') {
+            try {
+              const jsonMessage = JSON.parse(data);
+              const exitMsg = jsonMessage as ExitMessage;
+              if (exitMsg?.type === 'exit' && typeof exitMsg.exitCode === 'number') {
+                this.logger.debug(`[GBox SDK exec] Received exit message: Code ${exitMsg.exitCode}`);
+                receivedExitCode = exitMsg.exitCode;
+                // Don't close here, wait for server to close or onClose event
+              } else {
+                this.logger.warn(`[GBox SDK exec] Received unexpected JSON text message:`, jsonMessage);
+              }
+            } catch (e) {
+              this.logger.warn(`[GBox SDK exec] Received non-JSON text message: ${data}`);
+            }
+          } else if (data instanceof ArrayBuffer) {
+            if (data.byteLength > 0) {
+                if (tty) {
+                  // TTY mode: all output is considered stdout
+                  rawStdoutBuffer.push(data);
+                } else {
+                  // Non-TTY mode: First byte is stream type, rest is payload
+                  const streamType = new Uint8Array(data, 0, 1)[0] as StreamType;
+                  const payload = data.slice(1); // Get the actual content
+                  if (payload.byteLength > 0) {
+                    if (streamType === StreamTypeStdout) {
+                       rawStdoutBuffer.push(payload);
+                    } else if (streamType === StreamTypeStderr) {
+                       rawStderrBuffer.push(payload);
+                    }
+                    // Ignore StreamTypeStdin (0) if received
+                  }
+                }
+            }
+          } else {
+            this.logger.warn(`[GBox SDK exec] Received message of unknown type: ${typeof data}`, data);
+          }
+        },
+        onError: (error: Error) => {
+          this.logger.error('[GBox SDK exec] WebSocket error:', error);
+          connectionError = error; // Store error to reject in onClose
+        },
+        onClose: (code: number, reason: string, wasClean: boolean) => {
+          this.logger.debug(
+            `[GBox SDK exec] WebSocket closed. Code: ${code}, Reason: ${reason}, WasClean: ${wasClean}`
+          );
+
+          if (connectionError) {
+            reject(connectionError);
+            return;
+          }
+
+          if (receivedExitCode !== null) {
+            // Exit code received, process buffers
+            const stdoutBuffer = this.concatBuffers(rawStdoutBuffer);
+            const stderrBuffer = this.concatBuffers(rawStderrBuffer);
+            const decoder = new TextDecoder(); // Default UTF-8
+            const stdout = decoder.decode(stdoutBuffer);
+            const stderr = decoder.decode(stderrBuffer);
+            // Resolve with strings and buffers
+            resolve({ exitCode: receivedExitCode, stdout, stderr, stdoutBuffer, stderrBuffer });
+          } else {
+            // Closed without receiving exit code - treat as an error
+            reject(new Error(`WebSocket closed (Code: ${code}, Reason: ${reason}, Clean: ${wasClean}) before receiving exit code.`));
+          }
+        },
+      }, this.logger); // Pass the logger instance
+
+      // Initiate connection and handle initial failure
+      wsClientInstance.connect().catch(initialError => {
+        this.logger.error('[GBox SDK exec] Initial WebSocket connection failed:', initialError);
+        reject(initialError); // Reject the main exec promise
+      });
+    });
+  }
+
+  // Helper to construct the full WebSocket URL for the exec command
+  private buildExecWsUrl(boxId: string, params: { cmd: string[]; tty: boolean }): string {
+    const httpUrl = this.httpClient.defaults.baseURL;
+    if (!httpUrl) {
+      throw new Error('Cannot determine WebSocket URL: Axios baseURL is not set.');
+    }
+
+    const { cmd, tty } = params;
+
+    const basePath = `${API_PREFIX}/${boxId}/exec/ws`;
+    const url = new URL(basePath, httpUrl);
+
+
+    // Switch protocol from HTTP(S) to WS(S)
+    url.protocol = url.protocol.replace(/^http/, 'ws');
+
+    // Build search parameters
+    url.searchParams.set('cmd', cmd[0]);
+    cmd.slice(1).forEach(arg => url.searchParams.append('arg', arg));
+    if (tty) {
+      url.searchParams.set('tty', 'true');
+    }
+
+    return url.toString();
+  }
+
+  // Helper to concatenate ArrayBuffers
+  private concatBuffers(buffers: ArrayBuffer[]): ArrayBuffer {
+      let totalLength = 0;
+      for (const buffer of buffers) {
+          totalLength += buffer.byteLength;
+      }
+
+      const result = new Uint8Array(totalLength);
+      let offset = 0;
+      for (const buffer of buffers) {
+          result.set(new Uint8Array(buffer), offset);
+          offset += buffer.byteLength;
+      }
+      return result.buffer;
+  }
+
   // Helper to map extra_labels from API to labels in SDK consistently
   // Ensure input/output types are correct (T should extend BoxCreateResponse potentially)
-  private mapLabels<
-    T extends Partial<BoxData> & {
-      extra_labels?: Record<string, string>;
-      message?: string;
-    },
-  >(data: T): T & { labels?: Record<string, string> } {
+  private mapLabels<T extends Partial<BoxData> & { extra_labels?: Record<string, string>; message?: string; }>(data: T): T & { labels?: Record<string, string> } {
     if (data && data.extra_labels) {
       data.labels = { ...(data.labels || {}), ...data.extra_labels };
       delete data.extra_labels;
