@@ -14,7 +14,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
-
+	
+	"github.com/gorilla/websocket"
 	"github.com/google/uuid"
 	"github.com/playwright-community/playwright-go"
 	"github.com/stretchr/testify/assert"
@@ -75,6 +76,9 @@ func (m *mockBoxService) Stop(ctx context.Context, id string) (*boxModel.BoxStop
 }
 func (m *mockBoxService) Run(ctx context.Context, id string, params *boxModel.BoxRunParams) (*boxModel.BoxRunResult, error) {
 	return nil, fmt.Errorf("mockBoxService.Run not implemented")
+}
+func (m *mockBoxService) ExecWS(ctx context.Context, id string, params *boxModel.BoxExecWSParams, conn *websocket.Conn) (*boxModel.BoxExecResult, error) {
+	return nil, fmt.Errorf("mockBoxService.ExecWS not implemented")
 }
 
 var _ boxSvc.BoxService = (*mockBoxService)(nil)

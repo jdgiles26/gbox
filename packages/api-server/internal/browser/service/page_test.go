@@ -2,7 +2,6 @@ package service_test
 
 import (
 	md "github.com/JohannesKaufmann/html-to-markdown"
-	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
