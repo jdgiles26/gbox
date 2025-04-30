@@ -7,7 +7,7 @@ import type {
   BoxRunResponse,
   BoxExtractArchiveResponse,
   BoxRunOptions, // Import the new options type
-  BoxExecCompletionResult,
+  BoxExecProcess,
   BoxExecOptions, // Pass through new options type
 } from '../types/box.ts';
 import { NotFoundError } from '../errors.ts';
@@ -146,13 +146,13 @@ export class Box {
 
   /**
    * Executes a command in the Box via WebSocket, waits for completion,
-   * and streams output via callbacks. Returns the exit code upon completion.
+   * and returns streams for stdout/stderr and a promise for the exit code.
    *
    * @param cmd The command and its arguments.
-   * @param options Optional settings like tty mode, working directory, abort signal, and output callbacks (`onStdout`, `onStderr`).
-   * @returns A promise that resolves with an object containing the `exitCode` when the command finishes.
+   * @param options Optional settings like tty mode, working directory, and abort signal.
+   * @returns A Promise resolving to an object containing `stdout` and `stderr` Readable streams, and a Promise `exitCode` which resolves with the command's exit code.
    */
-  async exec(cmd: string[], options?: BoxExecOptions): Promise<BoxExecCompletionResult> {
+  async exec(cmd: string[], options?: BoxExecOptions): Promise<BoxExecProcess> {
     // Pass cmd and options directly to the api method
     return this.boxApi.exec(this.id, cmd, options);
   }

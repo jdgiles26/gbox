@@ -2,10 +2,12 @@ package docker
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -99,14 +101,16 @@ func (s *Service) ExecWS(ctx context.Context, id string, params *model.BoxExecWS
 		defer func() {
 			copyDone <- true
 			// Close the write side of the Docker attach connection to signal EOF to stdin
+			// This defer ensures CloseWrite is called even if the loop exits due to WebSocket close/error before receiving stdin_eof
 			if closeWriter, ok := attachResp.Conn.(interface{ CloseWrite() error }); ok {
-				s.logger.Debugf("ExecWS [%s]: Closing docker stdin pipe", id)
+				s.logger.Debugf("ExecWS [%s]: Closing docker stdin pipe in defer", id) // Modified log
 				if err := closeWriter.CloseWrite(); err != nil && !isConnectionClosed(err) {
-					s.logger.Warnf("ExecWS [%s]: Error closing docker stdin pipe: %v", id, err)
+					s.logger.Warnf("ExecWS [%s]: Error closing docker stdin pipe in defer: %v", id, err)
 				}
 			} else {
-				s.logger.Warnf("ExecWS [%s]: Could not get CloseWrite() for docker stdin pipe", id)
+				s.logger.Warnf("ExecWS [%s]: Could not get CloseWrite() for docker stdin pipe in defer", id)
 			}
+			s.logger.Debugf("ExecWS [%s]: WebSocket input processing goroutine finished.", id) // Added log
 		}()
 		for {
 			messageType, message, err := wsConn.ReadMessage()
@@ -125,25 +129,53 @@ func (s *Service) ExecWS(ctx context.Context, id string, params *model.BoxExecWS
 				return // Exit goroutine on any error or close
 			}
 
-			if messageType == websocket.TextMessage || messageType == websocket.BinaryMessage {
-				_, err = attachResp.Conn.Write(message)
-				if err != nil {
-					if isConnectionClosed(err) {
-						s.logger.Debugf("ExecWS [%s]: Docker stdin pipe closed while writing.", id)
-						return // Pipe closed, exit goroutine normally
+			switch messageType {
+			case websocket.TextMessage:
+				// Check for special stdin EOF message
+				var controlMsg map[string]string
+				if json.Unmarshal(message, &controlMsg) == nil && controlMsg["type"] == "stdin_eof" {
+					s.logger.Debugf("ExecWS [%s]: Received stdin_eof message from client. Closing container stdin now.", id)
+					// Close the container's stdin pipe immediately
+					if closeWriter, ok := attachResp.Conn.(interface{ CloseWrite() error }); ok {
+						if err := closeWriter.CloseWrite(); err != nil && !isConnectionClosed(err) {
+							s.logger.Warnf("ExecWS [%s]: Error closing docker stdin pipe after EOF message: %v", id, err)
+							// Potentially send error back? For now, just log.
+						} else {
+							s.logger.Debugf("ExecWS [%s]: Successfully closed docker stdin pipe after EOF message.", id)
+						}
+					} else {
+						s.logger.Warnf("ExecWS [%s]: Could not get CloseWrite() for docker stdin pipe after EOF message", id)
 					}
-					s.logger.Errorf("ExecWS [%s]: Error writing to docker stdin: %v", id, err)
-					errChan <- fmt.Errorf("docker stdin write error: %w", err)
-					return // Exit goroutine if write fails
+					// DO NOT return here. Continue listening on the WebSocket for potential close frame or errors.
+					// The defer statement will handle the final CloseWrite if needed.
+				} else {
+					s.logger.Warnf("ExecWS [%s]: Received unexpected text message, ignoring: %s", id, string(message))
+					// Ignore other text messages for now, as stdin data should be binary.
 				}
-			} else if messageType == websocket.CloseMessage {
-				s.logger.Infof("ExecWS [%s]: Received WebSocket close message.", id)
-				mu.Lock()
-				s.logger.Infof("ExecWS [%s]: WebSocket connection closed cleanly by client.", id)
-				mu.Unlock()
+
+			case websocket.BinaryMessage:
+				// Write binary messages directly to container stdin
+				_, writeErr := attachResp.Conn.Write(message)
+				if writeErr != nil {
+					if isConnectionClosed(writeErr) {
+						s.logger.Debugf("ExecWS [%s]: Docker stdin pipe closed while writing binary data (might be expected after EOF or container exit).", id)
+						// Pipe closed, likely due to container exit or previous EOF close. Exit goroutine.
+						return
+					}
+					s.logger.Errorf("ExecWS [%s]: Error writing binary data to docker stdin: %v", id, writeErr)
+					// Send error only if it's not a closed pipe error
+					if !errors.Is(writeErr, net.ErrClosed) && !strings.Contains(writeErr.Error(), "use of closed network connection") {
+						errChan <- fmt.Errorf("docker stdin write error: %w", writeErr)
+					}
+					return // Exit goroutine if write fails significantly
+				}
+
+			case websocket.CloseMessage:
+				s.logger.Infof("ExecWS [%s]: Received WebSocket close message from client.", id)
 				return // Exit goroutine
-			} else {
-				s.logger.Debugf("ExecWS [%s]: Ignored WebSocket message type: %d", id, messageType)
+
+			default:
+				s.logger.Warnf("ExecWS [%s]: Ignored WebSocket message type: %d", id, messageType)
 			}
 		}
 	}()

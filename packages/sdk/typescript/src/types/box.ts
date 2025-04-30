@@ -1,3 +1,5 @@
+// No Node.js stream import needed for Web Streams
+
 // Basic structure for a Box object returned by the API
 export interface BoxData {
   id: string;
@@ -99,11 +101,15 @@ export interface BoxExtractArchiveResponse {
 // --- New Exec Types (Promise-based) ---
 
 /**
- * Result type for the Box.exec() promise upon command completion.
+ * Represents the running process within the box started by exec.
  */
-export type BoxExecCompletionResult = {
+export type BoxExecProcess = {
+  /** A ReadableStream for the standard output of the command. */
+  stdout: ReadableStream<Uint8Array>;
+  /** A ReadableStream for the standard error of the command. */
+  stderr: ReadableStream<Uint8Array>;
   /** The exit code of the command. */
-  exitCode: number;
+  exitCode: Promise<number>; // Changed to a Promise
 };
 
 /**
@@ -116,10 +122,8 @@ export type BoxExecOptions = {
   signal?: AbortSignal;
   /** Optional working directory inside the container. */
   workingDir?: string;
-  /** Optional callback for receiving stdout data chunks. */
-  onStdout?: (chunk: ArrayBuffer) => void;
-  /** Optional callback for receiving stderr data chunks. */
-  onStderr?: (chunk: ArrayBuffer) => void;
+  /** Optional standard input to provide to the command. Can be a string or a ReadableStream. */
+  stdin?: string | ReadableStream<Uint8Array>;
 };
 
 // --- End New Exec Types ---

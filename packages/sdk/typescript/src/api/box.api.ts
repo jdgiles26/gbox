@@ -13,7 +13,7 @@ import type {
   BoxRunOptions,
   StreamType,
   ExitMessage,
-  BoxExecCompletionResult,
+  BoxExecProcess,
   BoxExecOptions,
 } from '../types/box.ts';
 import { StreamTypeStdout, StreamTypeStderr } from '../types/box.ts';
@@ -21,7 +21,6 @@ import { WebSocketClient } from './ws-client.ts';
 
 
 const API_PREFIX = '/api/v1/boxes';
-const WS_PREFIX = '/ws/boxes';
 
 export class BoxApi extends Client {
   /**
@@ -299,14 +298,14 @@ export class BoxApi extends Client {
    * @param boxId The ID of the box.
    * @param cmd The command and its arguments as an array of strings.
    * @param options Optional settings like tty mode and abort signal.
-   * @returns A promise that resolves with the exit code, stdout/stderr strings and buffers.
+   * @returns An object containing Readable streams for stdout and stderr, and a Promise for the exit code.
    */
   async exec(
     boxId: string,
     cmd: string[],
     options?: BoxExecOptions
-  ): Promise<BoxExecCompletionResult> {
-    const { tty = false, signal, workingDir } = options ?? {};
+  ): Promise<BoxExecProcess> {
+    const { tty = false, signal, workingDir, stdin } = options ?? {};
 
     if (!cmd || cmd.length === 0) {
       throw new Error('cmd must be a non-empty array');
@@ -316,18 +315,87 @@ export class BoxApi extends Client {
     const wsUrlString = this.buildExecWsUrl(boxId, { cmd, tty, workingDir });
     this.logger.debug(`[GBox SDK exec] Constructed WebSocket URL: ${wsUrlString}`);
 
-    return new Promise<BoxExecCompletionResult>((resolve, reject) => {
+    // Create streams
+    let stdoutController!: ReadableStreamDefaultController<Uint8Array>;
+    const stdoutStream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        stdoutController = controller;
+      }
+    });
+
+    let stderrController!: ReadableStreamDefaultController<Uint8Array>;
+    const stderrStream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        stderrController = controller;
+      }
+    });
+
+    // Create promise for exit code
+    let resolveExitCode!: (code: number) => void;
+    let rejectExitCode!: (reason?: any) => void;
+    const exitCodePromise = new Promise<number>((resolve, reject) => {
+      resolveExitCode = resolve;
+      rejectExitCode = reject;
+    });
+
+    // Return streams and promise immediately
+    const execProcess: BoxExecProcess = { stdout: stdoutStream, stderr: stderrStream, exitCode: exitCodePromise };
+
+    // Run WebSocket connection logic in the background (don't await the outer promise)
+    new Promise<void>((resolveWs, rejectWs) => { // Inner promise for WS lifecycle
       let receivedExitCode: number | null = null;
       let frameBuffer = new Uint8Array(0); // Buffer for fragmented Docker frames
       let wsClientInstance: WebSocketClient | null = null;
       let connectionError: Error | null = null;
+
+      // Helper async function to handle writing stdin to WebSocket
+      const handleStdin = async (ws: WebSocketClient, input: string | ReadableStream<Uint8Array>) => {
+        this.logger.debug('[GBox SDK exec] Starting stdin handling.');
+        try {
+          if (typeof input === 'string') {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(input);
+            if (data.length > 0) {
+               // Create a slice to ensure we get a plain ArrayBuffer, then send its buffer
+               await ws.send(data.slice().buffer);
+               this.logger.debug(`[GBox SDK exec] Sent ${data.length} bytes from string stdin.`);
+            }
+          } else if (input instanceof ReadableStream) {
+            const reader = input.getReader();
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) {
+                this.logger.debug('[GBox SDK exec] stdin stream finished.');
+                break;
+              }
+              if (value && value.length > 0) {
+                 // Create a slice to ensure we get a plain ArrayBuffer, then send its buffer
+                 // IMPORTANT: Await the send operation to ensure data is sent before the next read or EOF
+                 await ws.send(value.slice().buffer);
+                 this.logger.debug(`[GBox SDK exec] Sent ${value.length} bytes from stdin stream.`);
+              }
+            }
+            reader.releaseLock();
+          }
+          this.logger.debug('[GBox SDK exec] Finished writing stdin. Sending stdin_eof control message.');
+          // Send the control message to signal EOF
+          const eofMsg = JSON.stringify({ type: 'stdin_eof' });
+          await ws.send(eofMsg);
+          // DO NOT close the WebSocket here. It needs to stay open to receive stdout/stderr and the exit code.
+        } catch (error: any) {
+          this.logger.error('[GBox SDK exec] Error writing to stdin via WebSocket:', error);
+        }
+      };
 
       // Instantiate the client and connect
       wsClientInstance = new WebSocketClient(wsUrlString, {
         signal: signal,
         onOpen: () => {
           this.logger.debug('[GBox SDK exec] WebSocket connection opened.');
-          // Connection is open, waiting for messages...
+          // Start handling stdin *after* connection is open
+          if (stdin && wsClientInstance) {
+            handleStdin(wsClientInstance, stdin); // Don't await this, let it run in background
+          }
         },
         onMessage: (data: ArrayBuffer | string) => {
           if (typeof data === 'string') {
@@ -348,7 +416,9 @@ export class BoxApi extends Client {
             if (data.byteLength > 0) {
                 if (tty) {
                   // TTY mode: all output is considered stdout
-                  options?.onStdout?.(data);
+                  if (stdoutController) {
+                      stdoutController.enqueue(new Uint8Array(data));
+                  }
                 } else {
                   // Non-TTY mode: Process raw Docker stream with 8-byte header
                   // Append new data to our frame buffer
@@ -373,11 +443,14 @@ export class BoxApi extends Client {
                       const payload = frameBuffer.slice(8, frameSize);
                       if (payload.byteLength > 0) {
                          // Extract payload and append to correct buffer
-                         const payloadBuffer = payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength);
                          if (streamType === StreamTypeStdout) {
-                             options?.onStdout?.(payloadBuffer);
+                             if (stdoutController) {
+                                 stdoutController.enqueue(new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength));
+                             }
                          } else if (streamType === StreamTypeStderr) {
-                             options?.onStderr?.(payloadBuffer);
+                             if (stderrController) {
+                                 stderrController.enqueue(new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength));
+                             }
                          }
                          // Ignore StreamTypeStdin (0) if received, though unlikely
                       }
@@ -396,17 +469,19 @@ export class BoxApi extends Client {
         },
         onError: (error: Error) => {
           this.logger.error('[GBox SDK exec] WebSocket error:', error);
-          connectionError = error; // Store error to reject in onClose
+          // Signal error to streams and exit code promise
+          if (stdoutController) stdoutController.error(error);
+          if (stderrController) stderrController.error(error);
+          rejectExitCode(error);
+          rejectWs(error); // Reject the inner WS promise
         },
         onClose: (code: number, reason: string, wasClean: boolean) => {
           this.logger.debug(
             `[GBox SDK exec] WebSocket closed. Code: ${code}, Reason: ${reason}, WasClean: ${wasClean}`
           );
 
-          if (connectionError) {
-            reject(connectionError);
-            return;
-          }
+          // If connectionError occurred, onError already handled cleanup
+          if (connectionError) return;
 
           // Check if there's remaining data in the frame buffer (should ideally be empty if stream closed cleanly)
           if (!tty && frameBuffer.length > 0) {
@@ -417,10 +492,18 @@ export class BoxApi extends Client {
 
           if (receivedExitCode !== null) {
             // Exit code received before close, resolve
-            resolve({ exitCode: receivedExitCode });
+            resolveExitCode(receivedExitCode);
+            // Signal end of streams
+            if (stdoutController) stdoutController.close();
+            if (stderrController) stderrController.close();
+            resolveWs(); // Resolve the inner WS promise
           } else {
             // Closed without receiving exit code - treat as an error
-            reject(new Error(`WebSocket closed (Code: ${code}, Reason: ${reason}, Clean: ${wasClean}) before receiving exit code.`));
+            const closeError = new Error(`WebSocket closed (Code: ${code}, Reason: ${reason}, Clean: ${wasClean}) before receiving exit code.`);
+            if (stdoutController) stdoutController.error(closeError);
+            if (stderrController) stderrController.error(closeError);
+            rejectExitCode(closeError);
+            rejectWs(closeError); // Reject the inner WS promise
           }
         },
       }, this.logger); // Pass the logger instance
@@ -428,9 +511,19 @@ export class BoxApi extends Client {
       // Initiate connection and handle initial failure
       wsClientInstance.connect().catch(initialError => {
         this.logger.error('[GBox SDK exec] Initial WebSocket connection failed:', initialError);
-        reject(initialError); // Reject the main exec promise
+        // Destroy streams and reject promise if initial connection fails
+        if (stdoutController) stdoutController.error(initialError);
+        if (stderrController) stderrController.error(initialError);
+        rejectExitCode(initialError);
+        rejectWs(initialError); // Reject the inner WS promise
       });
+    }).catch(wsError => {
+        // Catch errors from the inner WS promise (already handled by rejectExitCode/stream destroy)
+        this.logger.debug('[GBox SDK exec] WebSocket lifecycle promise rejected:', wsError.message);
     });
+
+    // IMPORTANT: Return the object with streams/promise immediately
+    return execProcess;
   }
 
   // Helper to construct the full WebSocket URL for the exec command
