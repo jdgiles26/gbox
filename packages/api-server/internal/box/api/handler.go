@@ -264,11 +264,12 @@ func (h *BoxHandler) ExecBoxWS(req *restful.Request, resp *restful.Response) {
 	boxID := req.PathParameter("id")
 
 	// --- Parameter Parsing from Query ---
-	// Example: /ws/boxes/{id}/exec?cmd=bash&arg=-c&arg=ls%20-l&tty=true
+	// Example: /ws/boxes/{id}/exec?cmd=bash&arg=-c&arg=ls%20-l&tty=true&workingDir=/path/to/working
 	queryParams := req.Request.URL.Query()
-	cmd := queryParams["cmd"]        // Returns a slice
-	args := queryParams["arg"]       // Returns a slice for multiple 'arg' params
-	ttyStr := queryParams.Get("tty") // Get single value
+	cmd := queryParams["cmd"]                      // Returns a slice
+	args := queryParams["arg"]                     // Returns a slice for multiple 'arg' params
+	ttyStr := queryParams.Get("tty")               // Get single value
+	workingDirStr := queryParams.Get("workingDir") // Get working directory
 
 	if len(cmd) == 0 {
 		// Use http.Error for upgrade failures before connection is established
@@ -287,9 +288,10 @@ func (h *BoxHandler) ExecBoxWS(req *restful.Request, resp *restful.Response) {
 	}
 
 	execParams := &model.BoxExecWSParams{
-		Cmd:  cmd, // Use the first command element
-		Args: args,
-		TTY:  tty,
+		Cmd:        cmd, // Use the first command element
+		Args:       args,
+		TTY:        tty,
+		WorkingDir: workingDirStr, // Set working directory
 	}
 	//-------------------------------------
 
@@ -303,7 +305,7 @@ func (h *BoxHandler) ExecBoxWS(req *restful.Request, resp *restful.Response) {
 	}
 	defer wsConn.Close()
 
-	log.Infof("ExecBoxWS [%s]: WebSocket connection established. TTY: %v, Cmd: %v, Args: %v", boxID, tty, cmd, args)
+	log.Infof("ExecBoxWS [%s]: WebSocket connection established. TTY: %v, Cmd: %v, Args: %v, WorkingDir: %s", boxID, tty, cmd, args, workingDirStr)
 
 	// Execute command using the WebSocket service method
 	// Use context from the original request

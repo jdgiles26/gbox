@@ -13,7 +13,7 @@ import type {
   BoxRunOptions,
   StreamType,
   ExitMessage,
-  BoxExecResult,
+  BoxExecCompletionResult,
   BoxExecOptions,
 } from '../types/box.ts';
 import { StreamTypeStdout, StreamTypeStderr } from '../types/box.ts';
@@ -305,21 +305,20 @@ export class BoxApi extends Client {
     boxId: string,
     cmd: string[],
     options?: BoxExecOptions
-  ): Promise<BoxExecResult> {
-    const { tty = false, signal } = options ?? {};
+  ): Promise<BoxExecCompletionResult> {
+    const { tty = false, signal, workingDir } = options ?? {};
 
     if (!cmd || cmd.length === 0) {
       throw new Error('cmd must be a non-empty array');
     }
 
-    // Construct the full WebSocket URL using the helper
-    const wsUrlString = this.buildExecWsUrl(boxId, { cmd, tty });
+    // Construct the full WebSocket URL using the helper, passing workingDir
+    const wsUrlString = this.buildExecWsUrl(boxId, { cmd, tty, workingDir });
     this.logger.debug(`[GBox SDK exec] Constructed WebSocket URL: ${wsUrlString}`);
 
-    return new Promise<BoxExecResult>((resolve, reject) => {
+    return new Promise<BoxExecCompletionResult>((resolve, reject) => {
       let receivedExitCode: number | null = null;
-      const rawStdoutBuffer: ArrayBuffer[] = []; // Store raw stdout buffers
-      const rawStderrBuffer: ArrayBuffer[] = []; // Store raw stderr buffers
+      let frameBuffer = new Uint8Array(0); // Buffer for fragmented Docker frames
       let wsClientInstance: WebSocketClient | null = null;
       let connectionError: Error | null = null;
 
@@ -349,18 +348,45 @@ export class BoxApi extends Client {
             if (data.byteLength > 0) {
                 if (tty) {
                   // TTY mode: all output is considered stdout
-                  rawStdoutBuffer.push(data);
+                  options?.onStdout?.(data);
                 } else {
-                  // Non-TTY mode: First byte is stream type, rest is payload
-                  const streamType = new Uint8Array(data, 0, 1)[0] as StreamType;
-                  const payload = data.slice(1); // Get the actual content
-                  if (payload.byteLength > 0) {
-                    if (streamType === StreamTypeStdout) {
-                       rawStdoutBuffer.push(payload);
-                    } else if (streamType === StreamTypeStderr) {
-                       rawStderrBuffer.push(payload);
+                  // Non-TTY mode: Process raw Docker stream with 8-byte header
+                  // Append new data to our frame buffer
+                  const newData = new Uint8Array(data);
+                  const combined = new Uint8Array(frameBuffer.length + newData.length);
+                  combined.set(frameBuffer, 0);
+                  combined.set(newData, frameBuffer.length);
+                  frameBuffer = combined;
+
+                  // Process as many complete frames as possible from the buffer
+                  while (frameBuffer.length >= 8) {
+                    const header = frameBuffer.slice(0, 8);
+                    const dataView = new DataView(header.buffer, header.byteOffset, header.byteLength);
+                    const streamType = dataView.getUint8(0) as StreamType;
+                    // Bytes 1, 2, 3 are reserved
+                    const payloadSize = dataView.getUint32(4, false); // false for big-endian
+
+                    const frameSize = 8 + payloadSize;
+
+                    // Check if the buffer contains the full frame
+                    if (frameBuffer.length >= frameSize) {
+                      const payload = frameBuffer.slice(8, frameSize);
+                      if (payload.byteLength > 0) {
+                         // Extract payload and append to correct buffer
+                         const payloadBuffer = payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength);
+                         if (streamType === StreamTypeStdout) {
+                             options?.onStdout?.(payloadBuffer);
+                         } else if (streamType === StreamTypeStderr) {
+                             options?.onStderr?.(payloadBuffer);
+                         }
+                         // Ignore StreamTypeStdin (0) if received, though unlikely
+                      }
+                      // Remove the processed frame from the buffer
+                      frameBuffer = frameBuffer.slice(frameSize);
+                    } else {
+                      // Full frame not yet available, wait for more data
+                      break;
                     }
-                    // Ignore StreamTypeStdin (0) if received
                   }
                 }
             }
@@ -382,15 +408,16 @@ export class BoxApi extends Client {
             return;
           }
 
+          // Check if there's remaining data in the frame buffer (should ideally be empty if stream closed cleanly)
+          if (!tty && frameBuffer.length > 0) {
+             this.logger.warn(`[GBox SDK exec] WebSocket closed with ${frameBuffer.length} unprocessed bytes in frame buffer.`);
+             // Depending on requirements, you might want to reject or try processing the remaining bytes
+             // For simplicity, we'll log a warning and proceed.
+          }
+
           if (receivedExitCode !== null) {
-            // Exit code received, process buffers
-            const stdoutBuffer = this.concatBuffers(rawStdoutBuffer);
-            const stderrBuffer = this.concatBuffers(rawStderrBuffer);
-            const decoder = new TextDecoder(); // Default UTF-8
-            const stdout = decoder.decode(stdoutBuffer);
-            const stderr = decoder.decode(stderrBuffer);
-            // Resolve with strings and buffers
-            resolve({ exitCode: receivedExitCode, stdout, stderr, stdoutBuffer, stderrBuffer });
+            // Exit code received before close, resolve
+            resolve({ exitCode: receivedExitCode });
           } else {
             // Closed without receiving exit code - treat as an error
             reject(new Error(`WebSocket closed (Code: ${code}, Reason: ${reason}, Clean: ${wasClean}) before receiving exit code.`));
@@ -407,45 +434,35 @@ export class BoxApi extends Client {
   }
 
   // Helper to construct the full WebSocket URL for the exec command
-  private buildExecWsUrl(boxId: string, params: { cmd: string[]; tty: boolean }): string {
+  private buildExecWsUrl(boxId: string, params: { cmd: string[]; tty: boolean; workingDir?: string }): string {
     const httpUrl = this.httpClient.defaults.baseURL;
     if (!httpUrl) {
       throw new Error('Cannot determine WebSocket URL: Axios baseURL is not set.');
     }
 
-    const { cmd, tty } = params;
+    const { cmd, tty, workingDir } = params;
 
-    const basePath = `${API_PREFIX}/${boxId}/exec/ws`;
-    const url = new URL(basePath, httpUrl);
-
+    // Use API_PREFIX for the base path, as the route is under the API
+    const wsBasePath = `${API_PREFIX}/${boxId}/exec/ws`;
+    const url = new URL(wsBasePath, httpUrl); // Use httpUrl to resolve potential relative paths
 
     // Switch protocol from HTTP(S) to WS(S)
     url.protocol = url.protocol.replace(/^http/, 'ws');
 
     // Build search parameters
-    url.searchParams.set('cmd', cmd[0]);
-    cmd.slice(1).forEach(arg => url.searchParams.append('arg', arg));
+    // Ensure 'cmd' is treated as the command and subsequent elements as 'arg'
+    if (cmd.length > 0) {
+      url.searchParams.set('cmd', cmd[0]);
+      cmd.slice(1).forEach(arg => url.searchParams.append('arg', arg));
+    }
     if (tty) {
       url.searchParams.set('tty', 'true');
     }
+    if (workingDir) {
+      url.searchParams.set('workingDir', workingDir);
+    }
 
     return url.toString();
-  }
-
-  // Helper to concatenate ArrayBuffers
-  private concatBuffers(buffers: ArrayBuffer[]): ArrayBuffer {
-      let totalLength = 0;
-      for (const buffer of buffers) {
-          totalLength += buffer.byteLength;
-      }
-
-      const result = new Uint8Array(totalLength);
-      let offset = 0;
-      for (const buffer of buffers) {
-          result.set(new Uint8Array(buffer), offset);
-          offset += buffer.byteLength;
-      }
-      return result.buffer;
   }
 
   // Helper to map extra_labels from API to labels in SDK consistently

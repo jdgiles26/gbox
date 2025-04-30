@@ -2,7 +2,6 @@ package docker
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -46,10 +45,15 @@ func (s *Service) ExecWS(ctx context.Context, id string, params *model.BoxExecWS
 		AttachStdout: true,
 		AttachStderr: true,
 		Detach:       false,
-		DetachKeys:   "",  // Use default detach keys
-		Env:          nil, // No additional environment variables for now
-		WorkingDir:   common.DefaultWorkDirPath,
+		DetachKeys:   "",                // Use default detach keys
+		Env:          nil,               // No additional environment variables for now
+		WorkingDir:   params.WorkingDir, // Use provided or default below
 		Cmd:          append(params.Cmd, params.Args...),
+	}
+
+	// Use default working directory if not specified
+	if execConfig.WorkingDir == "" {
+		execConfig.WorkingDir = common.DefaultWorkDirPath
 	}
 
 	// Create exec instance
@@ -80,13 +84,10 @@ func (s *Service) ExecWS(ctx context.Context, id string, params *model.BoxExecWS
 			s.logger.Debugf("ExecWS [%s]: Docker output stream ended. Goroutine finished.", id)
 		}()
 		var writeErr error
-		if params.TTY {
-			// TTY mode: Raw stream copy using helper
-			_, writeErr = io.Copy(&wsWriter{conn: wsConn}, attachResp.Reader)
-		} else {
-			// Non-TTY mode: Multiplexed stream copy using helper
-			writeErr = s.streamMultiplexedToWS(attachResp.Reader, wsConn)
-		}
+		// Always copy raw stream directly to websocket using wsWriter helper.
+		// This sends the raw Docker stream (TTY or multiplexed with headers) as binary messages.
+		_, writeErr = io.Copy(&wsWriter{conn: wsConn}, attachResp.Reader)
+
 		if writeErr != nil && !isConnectionClosed(writeErr) {
 			s.logger.Errorf("ExecWS [%s]: Error writing to WebSocket: %v", id, writeErr)
 			errChan <- fmt.Errorf("websocket write error: %w", writeErr)
@@ -243,53 +244,4 @@ func (w *wsWriter) Write(p []byte) (n int, err error) {
 		return 0, err
 	}
 	return len(p), nil
-}
-
-// streamMultiplexedToWS reads the Docker multiplexed stream and writes framed messages to WebSocket.
-// Each WebSocket message will be: [StreamType (1 byte)][Payload Data]
-func (s *Service) streamMultiplexedToWS(reader io.Reader, wsConn *websocket.Conn) error {
-	header := make([]byte, 8) // Docker stream header is 8 bytes
-	// frameBuffer := make([]byte, 32*1024) // Removed unused buffer
-
-	for {
-		// Read the 8-byte header
-		_, err := io.ReadFull(reader, header)
-		if err != nil {
-			if err == io.EOF || isConnectionClosed(err) {
-				return nil // Clean exit from Docker stream
-			}
-			return fmt.Errorf("read stream header error: %w", err)
-		}
-
-		streamType := header[0] // 1 for stdout, 2 for stderr
-		frameSize := binary.BigEndian.Uint32(header[4:])
-
-		if frameSize == 0 {
-			continue // Skip empty frames
-		}
-
-		// Prepare the WebSocket message buffer: 1 byte for type + frameSize for payload
-		wsMessage := make([]byte, 1+frameSize)
-		wsMessage[0] = streamType
-
-		// Read the frame payload directly into the correct part of the WebSocket message buffer
-		payloadBuffer := wsMessage[1:]
-		_, err = io.ReadFull(reader, payloadBuffer)
-		if err != nil {
-			if err == io.EOF || isConnectionClosed(err) {
-				s.logger.Warnf("EOF or closed connection while reading frame payload (size %d). Possible unclean termination.", frameSize)
-				return nil // Consider this finished, though potentially incomplete
-			}
-			return fmt.Errorf("read stream payload error (size %d): %w", frameSize, err)
-		}
-
-		// Write the complete framed message (Type + Payload) to WebSocket
-		err = wsConn.WriteMessage(websocket.BinaryMessage, wsMessage)
-		if err != nil {
-			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
-				return nil // Client closed connection
-			}
-			return fmt.Errorf("websocket write frame error: %w", err)
-		}
-	}
 }

@@ -39,9 +39,10 @@ type BoxRunResult struct {
 
 // BoxExecWSParams represents parameters for executing a command via WebSocket
 type BoxExecWSParams struct {
-	Cmd  []string `json:"cmd"`            // Command to execute
-	Args []string `json:"args,omitempty"` // Arguments for the command
-	TTY  bool     `json:"tty,omitempty"`  // Whether to allocate a TTY
+	Cmd        []string `json:"cmd"`                  // Command to execute
+	Args       []string `json:"args,omitempty"`       // Arguments for the command
+	TTY        bool     `json:"tty,omitempty"`        // Whether to allocate a TTY
+	WorkingDir string   `json:"workingDir,omitempty"` // Working directory inside the container
 }
 
 // StreamType represents the type of stream in multiplexed output

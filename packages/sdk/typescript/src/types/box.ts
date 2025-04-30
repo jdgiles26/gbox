@@ -98,18 +98,12 @@ export interface BoxExtractArchiveResponse {
 
 // --- New Exec Types (Promise-based) ---
 
-// Result type for the buffered exec
-export type BoxExecResult = {
+/**
+ * Result type for the Box.exec() promise upon command completion.
+ */
+export type BoxExecCompletionResult = {
   /** The exit code of the command. */
   exitCode: number;
-  /** The buffered standard output as a string. */
-  stdout: string;
-  /** The buffered standard error as a string. */
-  stderr: string;
-  /** The buffered standard output as an ArrayBuffer. */
-  stdoutBuffer: ArrayBuffer;
-  /** The buffered standard error as an ArrayBuffer. */
-  stderrBuffer: ArrayBuffer;
 };
 
 /**
@@ -120,6 +114,12 @@ export type BoxExecOptions = {
   tty?: boolean;
   /** Optional AbortSignal to cancel the operation. */
   signal?: AbortSignal;
+  /** Optional working directory inside the container. */
+  workingDir?: string;
+  /** Optional callback for receiving stdout data chunks. */
+  onStdout?: (chunk: ArrayBuffer) => void;
+  /** Optional callback for receiving stderr data chunks. */
+  onStderr?: (chunk: ArrayBuffer) => void;
 };
 
 // --- End New Exec Types ---
