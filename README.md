@@ -1,10 +1,12 @@
 # gbox
 
-**gbox** is an open source project that provides a self-hostable sandbox for MCP integration or other AI agent usecases. The sandbox can be used as a computer for agent. It includes all necessary tools that agents needs for daily tasks, such as terminal, browser and file editor. See "Features" section for details,
+**gbox** is an open source project that provides a self-hostable sandbox for Agents to execute commands, read/write files, browse the web, operate iOS/Android. The sandbox can be used as a computer/phone/pad for agent. See "Features" section for details.
 
-As MCP is getting more and more popular, we find there is no easy way to enable MCP client such as Claude Desktop/Cursor to run tasks locally and securely. This project is based on the technology behind [gru.ai](https://gru.ai) and we wrap it into a system command and MCP server to make it easy to use.
+This project is based on the technology behind [gru.ai](https://gru.ai). It has been tested over 100000 Agent jobs.
 
 For advanced scenarios, we also kept the ability to run sandboxes in k8s cluster locally or remotely.
+
+As MCP is getting more and more popular, we also implemented a MCP server to make it easy to be directly integrated into MCP client such as Claude Desktop/Cursor.
 
 ## Features
 1. Terminal
@@ -15,7 +17,7 @@ For advanced scenarios, we also kept the ability to run sandboxes in k8s cluster
    - Mount host machine folders into sandbox
    - Access sandbox files through http links
    - Read file content in multi-modal
-   - Write/re-write files [under-development]
+   - Write/re-write files
    - Edit files [under-development]
    - Search files [under-development]
 3. Browser
@@ -27,44 +29,28 @@ For advanced scenarios, we also kept the ability to run sandboxes in k8s cluster
    - Start http service on any folder on demand [under-development]
 5. SDKs
    - Python SDK: Install using `pip install pygbox`. See [PyPI](https://pypi.org/project/pygbox/) for details.
-   - Typescript SDK [under-development]
+   - Typescript SDK
 6. MCP
    - Standard MCP support
    - Integrate Claude Desktop & Cursor
 
-## Use Cases
+## Use gbox as a SDK
 
-Your AI client such as Claude Desktop can use gbox MCP to deliver better results, such as
+### Python SDK
 
-### 1. Generating Diagrams
+```bash
+pip install pygbox
+```
+[Python SDK Documentation](packages/sdk/python/README.md)
 
-Generate diagrams of Tesla stock prices:
-![Image](https://i.imghippo.com/files/njBB6977VQQ.png)
-https://claude.ai/share/34de8ca3-4e04-441b-9e79-5875fa9fc97a
+### Typescript SDK
 
-### 2. Generating PDFs
+```bash
+npm install @gru/gbox
+```
+[Typescript SDK Documentation](packages/sdk/typescript/README.md)
 
-Generate PDF of latest AI news:
-![Image](https://i.imghippo.com/files/oMF9723LA.png)
-https://claude.ai/share/84600933-dcf2-44be-a2fd-7f49540db57a
-
-### 3. Analyzing and Calculation
-
-Analyze and compare Nvidia/Tesla market cap:
-![Image](https://i.imghippo.com/files/FE2710WR.png)
-https://claude.ai/share/70c335b7-9fff-4ee7-8459-e6b7462d8994
-
-### 4. Processing Local Files
-
-Find images in download folder and compress into zip.
-![image](https://i.imghippo.com/files/wcKb4481gMk.jpeg)
-https://claude.ai/share/f8c4c617-9b32-4062-a8e2-2ab33ef46f42
-
-### 5. Execute Arbitrary Tasks
-
-Download youtube video:
-![Image](https://i.imghippo.com/files/TI9396Rjg.png)
-https://claude.ai/share/c2ab6bcb-7032-489f-87d5-cc38f72c2ca9
+## Use gbox as a CLI
 
 ## Installation
 
@@ -108,7 +94,7 @@ gbox mcp export --merge-to claude
 # Restart Claude Desktop
 ```
 
-## Command Line Usage
+### Command Line Usage
 
 The project provides a command-line tool `gbox` for managing sandbox containers:
 
@@ -168,7 +154,41 @@ gbox box create \
 
 Note: The host path must exist before creating the container. The container path will be created automatically if it doesn't exist.
 
-## Development Setup
+## MCP Use Cases
+
+Your AI client such as Claude Desktop can use gbox MCP to deliver better results, such as
+
+### 1. Generating Diagrams
+
+Generate diagrams of Tesla stock prices:
+![Image](https://i.imghippo.com/files/njBB6977VQQ.png)
+https://claude.ai/share/34de8ca3-4e04-441b-9e79-5875fa9fc97a
+
+### 2. Generating PDFs
+
+Generate PDF of latest AI news:
+![Image](https://i.imghippo.com/files/oMF9723LA.png)
+https://claude.ai/share/84600933-dcf2-44be-a2fd-7f49540db57a
+
+### 3. Analyzing and Calculation
+
+Analyze and compare Nvidia/Tesla market cap:
+![Image](https://i.imghippo.com/files/FE2710WR.png)
+https://claude.ai/share/70c335b7-9fff-4ee7-8459-e6b7462d8994
+
+### 4. Processing Local Files
+
+Find images in download folder and compress into zip.
+![image](https://i.imghippo.com/files/wcKb4481gMk.jpeg)
+https://claude.ai/share/f8c4c617-9b32-4062-a8e2-2ab33ef46f42
+
+### 5. Execute Arbitrary Tasks
+
+Download youtube video:
+![Image](https://i.imghippo.com/files/TI9396Rjg.png)
+https://claude.ai/share/c2ab6bcb-7032-489f-87d5-cc38f72c2ca9
+
+## Develop gbox
 
 ### Prerequisites
 
@@ -201,7 +221,7 @@ cd packages/mcp-server && pnpm dev
 cd packages/mcp-server && pnpm inspect
 ```
 
-## Contributing
+### Contributing
 
 We welcome contributions! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
 
