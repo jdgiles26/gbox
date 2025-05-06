@@ -152,7 +152,10 @@ export class Box {
    * @param options Optional settings like tty mode, working directory, and abort signal.
    * @returns A Promise resolving to an object containing `stdout` and `stderr` Readable streams, and a Promise `exitCode` which resolves with the command's exit code.
    */
-  async exec(cmd: string[], options?: BoxExecOptions): Promise<BoxExecProcess> {
+  async exec(
+    cmd: string[], 
+    options?: BoxExecOptions
+  ): Promise<BoxExecProcess> {
     // Pass cmd and options directly to the api method
     return this.boxApi.exec(this.id, cmd, options);
   }

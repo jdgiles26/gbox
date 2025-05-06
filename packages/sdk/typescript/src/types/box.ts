@@ -101,15 +101,16 @@ export interface BoxExtractArchiveResponse {
 // --- New Exec Types (Promise-based) ---
 
 /**
- * Represents the running process within the box started by exec.
+ * The process object returned from the exec command.
+ * Includes streams for stdout and stderr, and a promise for the exit code.
  */
 export type BoxExecProcess = {
   /** A ReadableStream for the standard output of the command. */
-  stdout: ReadableStream<Uint8Array>;
+  stdout: ReadableStream;
   /** A ReadableStream for the standard error of the command. */
-  stderr: ReadableStream<Uint8Array>;
-  /** The exit code of the command. */
-  exitCode: Promise<number>; // Changed to a Promise
+  stderr: ReadableStream;
+  /** A Promise that resolves to the exit code of the command. */
+  exitCode: Promise<number>;
 };
 
 /**
@@ -123,7 +124,7 @@ export type BoxExecOptions = {
   /** Optional working directory inside the container. */
   workingDir?: string;
   /** Optional standard input to provide to the command. Can be a string or a ReadableStream. */
-  stdin?: string | ReadableStream<Uint8Array>;
+  stdin?: string | ReadableStream;
 };
 
 // --- End New Exec Types ---

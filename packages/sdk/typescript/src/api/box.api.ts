@@ -316,15 +316,15 @@ export class BoxApi extends Client {
     this.logger.debug(`[GBox SDK exec] Constructed WebSocket URL: ${wsUrlString}`);
 
     // Create streams
-    let stdoutController!: ReadableStreamDefaultController<Uint8Array>;
-    const stdoutStream = new ReadableStream<Uint8Array>({
+    let stdoutController: ReadableStreamDefaultController;
+    const stdoutStream = new ReadableStream({
       start(controller) {
         stdoutController = controller;
       }
     });
 
-    let stderrController!: ReadableStreamDefaultController<Uint8Array>;
-    const stderrStream = new ReadableStream<Uint8Array>({
+    let stderrController: ReadableStreamDefaultController;
+    const stderrStream = new ReadableStream({
       start(controller) {
         stderrController = controller;
       }
@@ -338,8 +338,12 @@ export class BoxApi extends Client {
       rejectExitCode = reject;
     });
 
-    // Return streams and promise immediately
-    const execProcess: BoxExecProcess = { stdout: stdoutStream, stderr: stderrStream, exitCode: exitCodePromise };
+    // Create streams and promise immediately
+    const execProcess: BoxExecProcess = { 
+      stdout: stdoutStream, 
+      stderr: stderrStream, 
+      exitCode: exitCodePromise 
+    };
 
     // Run WebSocket connection logic in the background (don't await the outer promise)
     new Promise<void>((resolveWs, rejectWs) => { // Inner promise for WS lifecycle
@@ -349,15 +353,16 @@ export class BoxApi extends Client {
       let connectionError: Error | null = null;
 
       // Helper async function to handle writing stdin to WebSocket
-      const handleStdin = async (ws: WebSocketClient, input: string | ReadableStream<Uint8Array>) => {
+      const handleStdin = async (ws: WebSocketClient, input: string | ReadableStream) => {
         this.logger.debug('[GBox SDK exec] Starting stdin handling.');
         try {
           if (typeof input === 'string') {
             const encoder = new TextEncoder();
             const data = encoder.encode(input);
             if (data.length > 0) {
-               // Create a slice to ensure we get a plain ArrayBuffer, then send its buffer
-               await ws.send(data.slice().buffer);
+               // Create a copy of the data
+               const copyData = data.slice();
+               await ws.send(copyData.buffer as ArrayBuffer);
                this.logger.debug(`[GBox SDK exec] Sent ${data.length} bytes from string stdin.`);
             }
           } else if (input instanceof ReadableStream) {
@@ -369,10 +374,20 @@ export class BoxApi extends Client {
                 break;
               }
               if (value && value.length > 0) {
-                 // Create a slice to ensure we get a plain ArrayBuffer, then send its buffer
-                 // IMPORTANT: Await the send operation to ensure data is sent before the next read or EOF
-                 await ws.send(value.slice().buffer);
-                 this.logger.debug(`[GBox SDK exec] Sent ${value.length} bytes from stdin stream.`);
+                 // Ensure we're sending valid data
+                 if (value instanceof Uint8Array) {
+                   const copyData = value.slice();
+                   await ws.send(copyData.buffer as ArrayBuffer);
+                 } else if (value instanceof ArrayBuffer) {
+                   const copyData = new Uint8Array(value).slice();
+                   await ws.send(copyData.buffer as ArrayBuffer);
+                 } else {
+                   // Convert to string and then to Uint8Array
+                   const data = new TextEncoder().encode(String(value));
+                   await ws.send(data.buffer as ArrayBuffer);
+                 }
+                 
+                 this.logger.debug(`[GBox SDK exec] Sent data from stdin stream.`);
               }
             }
             reader.releaseLock();
@@ -445,11 +460,11 @@ export class BoxApi extends Client {
                          // Extract payload and append to correct buffer
                          if (streamType === StreamTypeStdout) {
                              if (stdoutController) {
-                                 stdoutController.enqueue(new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength));
+                                 stdoutController.enqueue(payload);
                              }
                          } else if (streamType === StreamTypeStderr) {
                              if (stderrController) {
-                                 stderrController.enqueue(new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength));
+                                 stderrController.enqueue(payload);
                              }
                          }
                          // Ignore StreamTypeStdin (0) if received, though unlikely
