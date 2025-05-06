@@ -7,6 +7,8 @@ import type {
   BoxRunResponse,
   BoxExtractArchiveResponse,
   BoxRunOptions, // Import the new options type
+  BoxExecProcess,
+  BoxExecOptions, // Pass through new options type
 } from '../types/box.ts';
 import { NotFoundError } from '../errors.ts';
 // --- Node.js imports ---
@@ -34,7 +36,7 @@ export class Box {
   private readonly boxApi: BoxApi;
   private readonly browserApi: BrowserApi; // Add browserApi property
 
-  // Constructor now takes BoxData, BoxApi, and BrowserApi
+  // Constructor now takes BoxData, BoxApi, and BrowserApi (logger removed)
   constructor(boxData: BoxData, boxApi: BoxApi, browserApi: BrowserApi) {
     this.attrs = boxData; // Store the initial attributes
     this.boxApi = boxApi;
@@ -140,6 +142,22 @@ export class Box {
       response.exitCode = -1;
     }
     return response;
+  }
+
+  /**
+   * Executes a command in the Box via WebSocket, waits for completion,
+   * and returns streams for stdout/stderr and a promise for the exit code.
+   *
+   * @param cmd The command and its arguments.
+   * @param options Optional settings like tty mode, working directory, and abort signal.
+   * @returns A Promise resolving to an object containing `stdout` and `stderr` Readable streams, and a Promise `exitCode` which resolves with the command's exit code.
+   */
+  async exec(
+    cmd: string[], 
+    options?: BoxExecOptions
+  ): Promise<BoxExecProcess> {
+    // Pass cmd and options directly to the api method
+    return this.boxApi.exec(this.id, cmd, options);
   }
 
   /**

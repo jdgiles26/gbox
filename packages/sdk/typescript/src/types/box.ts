@@ -1,3 +1,5 @@
+// No Node.js stream import needed for Web Streams
+
 // Basic structure for a Box object returned by the API
 export interface BoxData {
   id: string;
@@ -94,4 +96,49 @@ export interface BoxReclaimResponse {
 export interface BoxExtractArchiveResponse {
   message: string; // Assuming a success message
   // Add other fields if the API returns more
+}
+
+// --- New Exec Types (Promise-based) ---
+
+/**
+ * The process object returned from the exec command.
+ * Includes streams for stdout and stderr, and a promise for the exit code.
+ */
+export type BoxExecProcess = {
+  /** A ReadableStream for the standard output of the command. */
+  stdout: ReadableStream;
+  /** A ReadableStream for the standard error of the command. */
+  stderr: ReadableStream;
+  /** A Promise that resolves to the exit code of the command. */
+  exitCode: Promise<number>;
+};
+
+/**
+ * Options for the Box.exec() method.
+ */
+export type BoxExecOptions = {
+  /** Whether to allocate a pseudo-TTY. Default: false */
+  tty?: boolean;
+  /** Optional AbortSignal to cancel the operation. */
+  signal?: AbortSignal;
+  /** Optional working directory inside the container. */
+  workingDir?: string;
+  /** Optional standard input to provide to the command. Can be a string or a ReadableStream. */
+  stdin?: string | ReadableStream;
+};
+
+// --- End New Exec Types ---
+
+// Stream type constants (matching backend)
+export type StreamType = 0 | 1 | 2;
+
+// Define constants for clarity, matching original enum keys
+export const StreamTypeStdin: StreamType = 0;
+export const StreamTypeStdout: StreamType = 1;
+export const StreamTypeStderr: StreamType = 2;
+
+// Structure for the final exit message from the backend
+export interface ExitMessage {
+  type: 'exit';
+  exitCode: number;
 }

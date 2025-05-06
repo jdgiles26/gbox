@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/babelcloud/gbox/packages/api-server/internal/box/service"
@@ -12,6 +13,7 @@ import (
 	"github.com/babelcloud/gbox/packages/api-server/pkg/logger"
 
 	"github.com/emicklei/go-restful/v3"
+	"github.com/gorilla/websocket"
 )
 
 var log = logger.New()
@@ -26,6 +28,16 @@ const (
 type apiError struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+}
+
+// Configure the WebSocket upgrader
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	// Allow all origins for now, adjust in production!
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
 }
 
 // BoxHandler handles HTTP requests for box operations
@@ -163,7 +175,7 @@ func (h *BoxHandler) ReclaimBoxes(req *restful.Request, resp *restful.Response) 
 	resp.WriteHeaderAndEntity(http.StatusOK, result)
 }
 
-// ExecBox executes a command in a box
+// ExecBox handles command execution via HTTP Hijacking (existing method)
 func (h *BoxHandler) ExecBox(req *restful.Request, resp *restful.Response) {
 	boxID := req.PathParameter("id")
 
@@ -180,7 +192,6 @@ func (h *BoxHandler) ExecBox(req *restful.Request, resp *restful.Response) {
 
 	// Check if the box is running
 	if box.Status != "running" {
-		// Log specifically that we are entering this block before writing the error
 		log.Warnf("ExecBox: Box %s is not running (state: %s). Returning 409 Conflict.", boxID, box.Status)
 		writeError(resp, http.StatusConflict, "BoxNotRunning", fmt.Sprintf("Box %s is not running (state: %s), please start it first", boxID, box.Status))
 		return
@@ -193,7 +204,7 @@ func (h *BoxHandler) ExecBox(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
-	// Check if we need to hijack the connection
+	// Hijack the connection logic remains the same...
 	upgrade := req.HeaderParameter("Upgrade")
 	connection := req.HeaderParameter("Connection")
 	accept := req.HeaderParameter("Accept")
@@ -201,59 +212,123 @@ func (h *BoxHandler) ExecBox(req *restful.Request, resp *restful.Response) {
 		accept = mediaTypeMultiplexedStream // Use local constant
 	}
 
-	// Validate Accept header
-	if accept != mediaTypeRawStream && accept != mediaTypeMultiplexedStream { // Use local constants
-		writeError(resp, http.StatusNotAcceptable, "UnsupportedMediaType",
-			fmt.Sprintf("Unsupported Accept header: %s", accept))
+	if accept != mediaTypeRawStream && accept != mediaTypeMultiplexedStream {
+		writeError(resp, http.StatusNotAcceptable, "UnsupportedMediaType", fmt.Sprintf("Unsupported Accept header: %s", accept))
 		return
 	}
 
-	// Hijack the connection if needed
 	httpResp := resp.ResponseWriter
 	hijacker, ok := httpResp.(http.Hijacker)
 	if !ok {
-		writeError(resp, http.StatusInternalServerError, "HijackError",
-			"response does not support hijacking")
+		writeError(resp, http.StatusInternalServerError, "HijackError", "response does not support hijacking")
 		return
 	}
 
 	clientConn, _, err := hijacker.Hijack()
 	if err != nil {
-		writeError(resp, http.StatusInternalServerError, "HijackError",
-			fmt.Sprintf("failed to hijack connection: %v", err))
+		// Cannot write error after potential partial hijack, just log
+		log.Errorf("ExecBox [%s]: Failed to hijack connection: %v", boxID, err)
 		return
 	}
 	defer clientConn.Close()
 
-	// Set the connection in the execReq (already read into this struct)
+	// Set the connection in the execReq
 	execReq.Conn = clientConn
 
 	// Write HTTP response headers directly to the hijacked connection
 	writeResponseHeaders(execReq.Conn, upgrade, connection, execReq.TTY)
 
-	// Execute command and handle streaming
+	// Execute command and handle streaming using the original service method
 	result, err := h.service.Exec(req.Request.Context(), boxID, &execReq)
 	if err != nil {
+		// Cannot write standard error after hijack, just log
 		if err == service.ErrBoxNotFound {
-			// Cannot write standard error after hijack, maybe log?
-			log.Errorf("Box not found for exec: %s", boxID)
-			// Consider closing the connection? clientConn.Close()
-			return
+			log.Errorf("ExecBox [%s]: Box not found during exec: %v", boxID, err)
+		} else {
+			log.Errorf("ExecBox [%s]: Error during hijacked exec: %v", boxID, err)
 		}
-		// Cannot write standard error after hijack, maybe log?
-		log.Errorf("ExecBoxError for box %s: %v", boxID, err)
-		// Consider closing the connection? clientConn.Close()
+		// Connection will be closed by defer
 		return
 	}
 
-	// Cannot write entity after hijack. Result (exit code) handling might need adjustment.
-	// Maybe log the exit code?
+	// Log the exit code, cannot write response entity after hijack
 	if result != nil {
-		log.Infof("Exec finished for box %s with exit code: %d", boxID, result.ExitCode)
+		log.Infof("ExecBox [%s]: Hijacked command finished with exit code: %d", boxID, result.ExitCode)
 	} else {
-		log.Warnf("Exec finished for box %s but result was nil", boxID)
+		log.Warnf("ExecBox [%s]: Hijacked command finished but result was nil", boxID)
 	}
-	// resp.WriteEntity(result) // Cannot do this after hijack
+}
+
+// ExecBoxWS handles command execution via WebSocket
+func (h *BoxHandler) ExecBoxWS(req *restful.Request, resp *restful.Response) {
+	boxID := req.PathParameter("id")
+
+	// --- Parameter Parsing from Query ---
+	// Example: /ws/boxes/{id}/exec?cmd=bash&arg=-c&arg=ls%20-l&tty=true&workingDir=/path/to/working
+	queryParams := req.Request.URL.Query()
+	cmd := queryParams["cmd"]                      // Returns a slice
+	args := queryParams["arg"]                     // Returns a slice for multiple 'arg' params
+	ttyStr := queryParams.Get("tty")               // Get single value
+	workingDirStr := queryParams.Get("workingDir") // Get working directory
+
+	if len(cmd) == 0 {
+		// Use http.Error for upgrade failures before connection is established
+		http.Error(resp.ResponseWriter, "Missing 'cmd' query parameter", http.StatusBadRequest)
+		return
+	}
+
+	tty := false
+	if ttyStr != "" {
+		var err error
+		tty, err = strconv.ParseBool(ttyStr)
+		if err != nil {
+			http.Error(resp.ResponseWriter, "Invalid 'tty' query parameter, must be true or false", http.StatusBadRequest)
+			return
+		}
+	}
+
+	execParams := &model.BoxExecWSParams{
+		Cmd:        cmd, // Use the first command element
+		Args:       args,
+		TTY:        tty,
+		WorkingDir: workingDirStr, // Set working directory
+	}
+	//-------------------------------------
+
+	// Upgrade HTTP connection to WebSocket
+	wsConn, err := upgrader.Upgrade(resp.ResponseWriter, req.Request, nil)
+	if err != nil {
+		// Upgrade writes error response itself
+		log.Errorf("ExecBoxWS [%s]: Failed to upgrade connection: %v", boxID, err)
+		// Don't writeError here, upgrader handles it.
+		return
+	}
+	defer wsConn.Close()
+
+	log.Infof("ExecBoxWS [%s]: WebSocket connection established. TTY: %v, Cmd: %v, Args: %v, WorkingDir: %s", boxID, tty, cmd, args, workingDirStr)
+
+	// Execute command using the WebSocket service method
+	// Use context from the original request
+	result, err := h.service.ExecWS(req.Request.Context(), boxID, execParams, wsConn)
+
+	if err != nil {
+		// Log error. Cannot easily send structured error over WS after exec starts/fails mid-stream.
+		// The service layer ExecWS might attempt to send a final error/exit message.
+		log.Errorf("ExecBoxWS [%s]: Error during WebSocket exec: %v", boxID, err)
+		// Connection will be closed by defer wsConn.Close()
+		// Optionally send a specific WebSocket close message with error code?
+		// wsConn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseInternalServerErr, err.Error()))
+		return
+	}
+
+	// Log the successful exit code (service might have already sent it via WS)
+	if result != nil {
+		log.Infof("ExecBoxWS [%s]: WebSocket command finished with exit code: %d", boxID, result.ExitCode)
+	} else {
+		// Should ideally not happen if error is nil
+		log.Warnf("ExecBoxWS [%s]: WebSocket command finished without error but result was nil", boxID)
+	}
+	// Final WebSocket closure is handled by defer
 }
 
 // RunBox runs a command in a box
@@ -332,8 +407,8 @@ func (h *BoxHandler) GetArchive(req *restful.Request, resp *restful.Response) {
 	}
 	defer archive.Close()
 
-	// Convert archiveResp to JSON string
-	statJSON, err := json.Marshal(archiveResp)
+	// Convert actual archiveResp to JSON string
+	statJSON, err := json.Marshal(archiveResp) // Use actual archiveResp
 	if err != nil {
 		writeError(resp, http.StatusInternalServerError, "GetArchiveError", fmt.Sprintf("Failed to marshal stat: %v", err))
 		return
@@ -342,7 +417,7 @@ func (h *BoxHandler) GetArchive(req *restful.Request, resp *restful.Response) {
 	// Set response headers
 	resp.Header().Set("Content-Type", "application/x-tar")
 	resp.Header().Set("X-Gbox-Path-Stat", string(statJSON))
-	resp.Header().Set("Last-Modified", archiveResp.Mtime)
+	resp.Header().Set("Last-Modified", archiveResp.Mtime) // Use actual Mtime
 
 	// Copy the archive to response
 	_, err = io.Copy(resp.ResponseWriter, archive)
@@ -350,7 +425,6 @@ func (h *BoxHandler) GetArchive(req *restful.Request, resp *restful.Response) {
 	if err != nil {
 		// Log the error, but don't try to writeError as headers might have been sent
 		log.Errorf("Failed to copy archive to response for box %s, path %s: %v", boxID, path, err)
-		// writeError(resp, http.StatusInternalServerError, "GetArchiveError", fmt.Sprintf("Failed to copy archive: %v", err))
 		return
 	}
 }
@@ -374,8 +448,8 @@ func (h *BoxHandler) HeadArchive(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
-	// Convert stat to JSON string
-	statJSON, err := json.Marshal(stat)
+	// Convert actual stat to JSON string
+	statJSON, err := json.Marshal(stat) // Use actual stat
 	if err != nil {
 		writeError(resp, http.StatusInternalServerError, "HeadArchiveError", fmt.Sprintf("Failed to marshal stat: %v", err))
 		return
@@ -399,17 +473,18 @@ func (h *BoxHandler) ExtractArchive(req *restful.Request, resp *restful.Response
 		return
 	}
 
+	// Use actual params
 	extractParams := &model.BoxArchiveExtractParams{
 		Path:    path,
 		Content: content,
 	}
 
+	// Call actual service method
 	if err := h.service.ExtractArchive(req.Request.Context(), boxID, extractParams); err != nil {
 		if err == service.ErrBoxNotFound {
 			writeError(resp, http.StatusNotFound, "BoxNotFound", err.Error())
 			return
 		}
-		// Log the specific error before returning 500
 		writeError(resp, http.StatusInternalServerError, "ExtractArchiveError", err.Error())
 		return
 	}
@@ -418,34 +493,41 @@ func (h *BoxHandler) ExtractArchive(req *restful.Request, resp *restful.Response
 
 // writeError writes an error response using local apiError struct
 func writeError(resp *restful.Response, status int, code, message string) {
-	resp.WriteHeaderAndEntity(status, &apiError{
-		Code:    code,
-		Message: message,
-	})
+	// Ensure headers aren't already written (e.g., after hijack or partial response)
+	// A simple check, might not be perfectly robust for all edge cases.
+	if resp.ResponseWriter.Header().Get("written") != "true" {
+		// Mark headers as written to prevent double writes
+		resp.Header().Set("written", "true")
+		resp.WriteHeaderAndEntity(status, &apiError{
+			Code:    code,
+			Message: message,
+		})
+	} else {
+		log.Warnf("Attempted to write error after headers were sent. Status: %d, Code: %s, Msg: %s", status, code, message)
+	}
 }
 
-// writeResponseHeaders writes HTTP response headers based on upgrade and TTY status
+// writeResponseHeaders writes HTTP response headers for Hijacked connection
 func writeResponseHeaders(w io.Writer, upgrade, connection string, tty bool) {
 	if upgrade == "tcp" && connection == "Upgrade" {
 		fmt.Fprintf(w, "HTTP/1.1 101 UPGRADED\r\n")
-		fmt.Fprintf(w, "Content-Type: %s\r\n", getContentType(tty)) // Use local helper
+		fmt.Fprintf(w, "Content-Type: %s\r\n", getContentType(tty))
 		fmt.Fprintf(w, "Connection: Upgrade\r\n")
 		fmt.Fprintf(w, "Upgrade: tcp\r\n")
-		log.Debugf("Protocol upgrade requested, using %s", getStreamType(tty)) // Use local helper
+		log.Debugf("Protocol upgrade requested, using %s", getStreamType(tty))
 	} else {
 		fmt.Fprintf(w, "HTTP/1.1 200 OK\r\n")
-		fmt.Fprintf(w, "Content-Type: %s\r\n", getContentType(tty))               // Use local helper
-		log.Debugf("No protocol upgrade requested, using %s", getStreamType(tty)) // Use local helper
+		fmt.Fprintf(w, "Content-Type: %s\r\n", getContentType(tty))
+		log.Debugf("No protocol upgrade requested, using %s", getStreamType(tty))
 	}
 	fmt.Fprintf(w, "\r\n")
 
-	// Flush response headers if possible
 	if f, ok := w.(http.Flusher); ok {
 		f.Flush()
 	}
 }
 
-// getContentType returns the appropriate content type based on TTY status using local constants
+// getContentType returns the appropriate content type based on TTY status
 func getContentType(tty bool) string {
 	if tty {
 		return mediaTypeRawStream
@@ -453,7 +535,7 @@ func getContentType(tty bool) string {
 	return mediaTypeMultiplexedStream
 }
 
-// getStreamType returns a human-readable stream type description using local constants
+// getStreamType returns a human-readable stream type description
 func getStreamType(tty bool) string {
 	if tty {
 		return "raw stream (TTY mode)"

@@ -19,6 +19,7 @@ type mockBoxService struct {
 func (m *mockBoxService) Create(ctx context.Context, params *boxModel.BoxCreateParams) (*boxModel.Box, error) {
 // ... methods ...
 }
+
 var _ boxSvc.BoxService = (*mockBoxService)(nil)
 */
 

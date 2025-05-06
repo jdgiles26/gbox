@@ -7,6 +7,7 @@ import (
 
 	"github.com/babelcloud/gbox/packages/api-server/internal/tracker"
 	model "github.com/babelcloud/gbox/packages/api-server/pkg/box"
+	"github.com/gorilla/websocket"
 )
 
 // BoxService defines the interface for box operations
@@ -25,6 +26,7 @@ type BoxService interface {
 
 	// Box run command operations
 	Exec(ctx context.Context, id string, params *model.BoxExecParams) (*model.BoxExecResult, error)
+	ExecWS(ctx context.Context, id string, params *model.BoxExecWSParams, wsConn *websocket.Conn) (*model.BoxExecResult, error)
 	Run(ctx context.Context, id string, params *model.BoxRunParams) (*model.BoxRunResult, error)
 
 	// Box file operations

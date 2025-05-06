@@ -1,7 +1,7 @@
 package api
 
 import (
-	"github.com/babelcloud/gbox/packages/api-server/pkg/box"
+	model "github.com/babelcloud/gbox/packages/api-server/pkg/box"
 	"github.com/emicklei/go-restful/v3"
 )
 
@@ -81,6 +81,14 @@ func RegisterRoutes(ws *restful.WebService, boxHandler *BoxHandler) {
 		Returns(400, "Bad Request", model.BoxError{}).
 		Returns(404, "Not Found", model.BoxError{}).
 		Returns(500, "Internal Server Error", model.BoxError{}))
+
+	// WebSocket route for executing commands
+	ws.Route(ws.GET("/boxes/{id}/exec/ws").To(boxHandler.ExecBoxWS).
+		Doc("execute a command in a box via WebSocket").
+		Param(ws.PathParameter("id", "identifier of the box").DataType("string")).
+		Returns(400, "Bad Request", model.BoxError{}). // e.g., missing cmd parameter
+		Returns(404, "Not Found", model.BoxError{}).
+		Returns(500, "Internal Server Error", model.BoxError{})) // e.g., upgrade failed
 
 	// Box Archive Operations
 	ws.Route(ws.HEAD("/boxes/{id}/archive").To(boxHandler.HeadArchive).
