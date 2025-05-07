@@ -1,5 +1,5 @@
 import { describe, beforeAll, afterAll, test, expect } from 'vitest';
-import { GBoxClient, Box } from '../../src/index';
+import { GBoxClient, Box, LogLevel } from '../../src/index';
 
 // Config settings
 const BASE_URL = 'http://localhost:28080';
@@ -13,7 +13,7 @@ describe('create real server tests', () => {
   // Initialize client before all tests
   beforeAll(async () => {
     // Initialize client
-    client = new GBoxClient({ baseURL: BASE_URL });
+    client = new GBoxClient({ baseURL: BASE_URL, logLevel: LogLevel.DEBUG });
     
     // Clean up old test containers
     const existingBoxes = await client.boxes.list({ label: TEST_LABEL });

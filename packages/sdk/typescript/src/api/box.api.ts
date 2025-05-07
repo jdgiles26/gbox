@@ -18,7 +18,9 @@ import type {
 } from '../types/box.ts';
 import { StreamTypeStdout, StreamTypeStderr } from '../types/box.ts';
 import { WebSocketClient } from './ws-client.ts';
+import { Logger } from '../logger.ts';
 
+const logger = new Logger('BoxApi');
 
 const API_PREFIX = '/api/v1/boxes';
 
@@ -311,26 +313,22 @@ export class BoxApi extends Client {
       throw new Error('cmd must be a non-empty array');
     }
 
-    // Construct the full WebSocket URL using the helper, passing workingDir
     const wsUrlString = this.buildExecWsUrl(boxId, { cmd, tty, workingDir });
-    this.logger.debug(`[GBox SDK exec] Constructed WebSocket URL: ${wsUrlString}`);
 
-    // Create streams
-    let stdoutController: ReadableStreamDefaultController;
+    let stdoutController!: ReadableStreamDefaultController;
     const stdoutStream = new ReadableStream({
       start(controller) {
         stdoutController = controller;
-      }
+      },
     });
 
-    let stderrController: ReadableStreamDefaultController;
+    let stderrController!: ReadableStreamDefaultController;
     const stderrStream = new ReadableStream({
       start(controller) {
         stderrController = controller;
-      }
+      },
     });
 
-    // Create promise for exit code
     let resolveExitCode!: (code: number) => void;
     let rejectExitCode!: (reason?: any) => void;
     const exitCodePromise = new Promise<number>((resolve, reject) => {
@@ -338,214 +336,253 @@ export class BoxApi extends Client {
       rejectExitCode = reject;
     });
 
-    // Create streams and promise immediately
-    const execProcess: BoxExecProcess = { 
-      stdout: stdoutStream, 
-      stderr: stderrStream, 
-      exitCode: exitCodePromise 
-    };
-
-    // Run WebSocket connection logic in the background (don't await the outer promise)
-    new Promise<void>((resolveWs, rejectWs) => { // Inner promise for WS lifecycle
-      let receivedExitCode: number | null = null;
-      let frameBuffer = new Uint8Array(0); // Buffer for fragmented Docker frames
-      let wsClientInstance: WebSocketClient | null = null;
-      let connectionError: Error | null = null;
-
-      // Helper async function to handle writing stdin to WebSocket
-      const handleStdin = async (ws: WebSocketClient, input: string | ReadableStream) => {
-        this.logger.debug('[GBox SDK exec] Starting stdin handling.');
-        try {
-          if (typeof input === 'string') {
-            const encoder = new TextEncoder();
-            const data = encoder.encode(input);
-            if (data.length > 0) {
-               // Create a copy of the data
-               const copyData = data.slice();
-               await ws.send(copyData.buffer as ArrayBuffer);
-               this.logger.debug(`[GBox SDK exec] Sent ${data.length} bytes from string stdin.`);
-            }
-          } else if (input instanceof ReadableStream) {
-            const reader = input.getReader();
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) {
-                this.logger.debug('[GBox SDK exec] stdin stream finished.');
-                break;
-              }
-              if (value && value.length > 0) {
-                 // Ensure we're sending valid data
-                 if (value instanceof Uint8Array) {
-                   const copyData = value.slice();
-                   await ws.send(copyData.buffer as ArrayBuffer);
-                 } else if (value instanceof ArrayBuffer) {
-                   const copyData = new Uint8Array(value).slice();
-                   await ws.send(copyData.buffer as ArrayBuffer);
-                 } else {
-                   // Convert to string and then to Uint8Array
-                   const data = new TextEncoder().encode(String(value));
-                   await ws.send(data.buffer as ArrayBuffer);
-                 }
-                 
-                 this.logger.debug(`[GBox SDK exec] Sent data from stdin stream.`);
-              }
-            }
-            reader.releaseLock();
-          }
-          this.logger.debug('[GBox SDK exec] Finished writing stdin. Sending stdin_eof control message.');
-          // Send the control message to signal EOF
-          const eofMsg = JSON.stringify({ type: 'stdin_eof' });
-          await ws.send(eofMsg);
-          // DO NOT close the WebSocket here. It needs to stay open to receive stdout/stderr and the exit code.
-        } catch (error: any) {
-          this.logger.error('[GBox SDK exec] Error writing to stdin via WebSocket:', error);
-        }
-      };
-
-      // Instantiate the client and connect
-      wsClientInstance = new WebSocketClient(wsUrlString, {
-        signal: signal,
-        onOpen: () => {
-          this.logger.debug('[GBox SDK exec] WebSocket connection opened.');
-          // Start handling stdin *after* connection is open
-          if (stdin && wsClientInstance) {
-            handleStdin(wsClientInstance, stdin); // Don't await this, let it run in background
-          }
-        },
-        onMessage: (data: ArrayBuffer | string) => {
-          if (typeof data === 'string') {
-            try {
-              const jsonMessage = JSON.parse(data);
-              const exitMsg = jsonMessage as ExitMessage;
-              if (exitMsg?.type === 'exit' && typeof exitMsg.exitCode === 'number') {
-                this.logger.debug(`[GBox SDK exec] Received exit message: Code ${exitMsg.exitCode}`);
-                receivedExitCode = exitMsg.exitCode;
-                // Don't close here, wait for server to close or onClose event
-              } else {
-                this.logger.warn(`[GBox SDK exec] Received unexpected JSON text message:`, jsonMessage);
-              }
-            } catch (e) {
-              this.logger.warn(`[GBox SDK exec] Received non-JSON text message: ${data}`);
-            }
-          } else if (data instanceof ArrayBuffer) {
-            if (data.byteLength > 0) {
-                if (tty) {
-                  // TTY mode: all output is considered stdout
-                  if (stdoutController) {
-                      stdoutController.enqueue(new Uint8Array(data));
-                  }
-                } else {
-                  // Non-TTY mode: Process raw Docker stream with 8-byte header
-                  // Append new data to our frame buffer
-                  const newData = new Uint8Array(data);
-                  const combined = new Uint8Array(frameBuffer.length + newData.length);
-                  combined.set(frameBuffer, 0);
-                  combined.set(newData, frameBuffer.length);
-                  frameBuffer = combined;
-
-                  // Process as many complete frames as possible from the buffer
-                  while (frameBuffer.length >= 8) {
-                    const header = frameBuffer.slice(0, 8);
-                    const dataView = new DataView(header.buffer, header.byteOffset, header.byteLength);
-                    const streamType = dataView.getUint8(0) as StreamType;
-                    // Bytes 1, 2, 3 are reserved
-                    const payloadSize = dataView.getUint32(4, false); // false for big-endian
-
-                    const frameSize = 8 + payloadSize;
-
-                    // Check if the buffer contains the full frame
-                    if (frameBuffer.length >= frameSize) {
-                      const payload = frameBuffer.slice(8, frameSize);
-                      if (payload.byteLength > 0) {
-                         // Extract payload and append to correct buffer
-                         if (streamType === StreamTypeStdout) {
-                             if (stdoutController) {
-                                 stdoutController.enqueue(payload);
-                             }
-                         } else if (streamType === StreamTypeStderr) {
-                             if (stderrController) {
-                                 stderrController.enqueue(payload);
-                             }
-                         }
-                         // Ignore StreamTypeStdin (0) if received, though unlikely
-                      }
-                      // Remove the processed frame from the buffer
-                      frameBuffer = frameBuffer.slice(frameSize);
-                    } else {
-                      // Full frame not yet available, wait for more data
-                      break;
-                    }
-                  }
-                }
-            }
-          } else {
-            this.logger.warn(`[GBox SDK exec] Received message of unknown type: ${typeof data}`, data);
-          }
-        },
-        onError: (error: Error) => {
-          this.logger.error('[GBox SDK exec] WebSocket error:', error);
-          // Signal error to streams and exit code promise
-          if (stdoutController) stdoutController.error(error);
-          if (stderrController) stderrController.error(error);
-          rejectExitCode(error);
-          rejectWs(error); // Reject the inner WS promise
-        },
-        onClose: (code: number, reason: string, wasClean: boolean) => {
-          this.logger.debug(
-            `[GBox SDK exec] WebSocket closed. Code: ${code}, Reason: ${reason}, WasClean: ${wasClean}`
-          );
-
-          // If connectionError occurred, onError already handled cleanup
-          if (connectionError) return;
-
-          // Check if there's remaining data in the frame buffer (should ideally be empty if stream closed cleanly)
-          if (!tty && frameBuffer.length > 0) {
-             this.logger.warn(`[GBox SDK exec] WebSocket closed with ${frameBuffer.length} unprocessed bytes in frame buffer.`);
-             // Depending on requirements, you might want to reject or try processing the remaining bytes
-             // For simplicity, we'll log a warning and proceed.
-          }
-
-          if (receivedExitCode !== null) {
-            // Exit code received before close, resolve
-            resolveExitCode(receivedExitCode);
-            // Signal end of streams
-            if (stdoutController) stdoutController.close();
-            if (stderrController) stderrController.close();
-            resolveWs(); // Resolve the inner WS promise
-          } else {
-            // Closed without receiving exit code - treat as an error
-            const closeError = new Error(`WebSocket closed (Code: ${code}, Reason: ${reason}, Clean: ${wasClean}) before receiving exit code.`);
-            if (stdoutController) stdoutController.error(closeError);
-            if (stderrController) stderrController.error(closeError);
-            rejectExitCode(closeError);
-            rejectWs(closeError); // Reject the inner WS promise
-          }
-        },
-      }, this.logger); // Pass the logger instance
-
-      // Initiate connection and handle initial failure
-      wsClientInstance.connect().catch(initialError => {
-        this.logger.error('[GBox SDK exec] Initial WebSocket connection failed:', initialError);
-        // Destroy streams and reject promise if initial connection fails
-        if (stdoutController) stdoutController.error(initialError);
-        if (stderrController) stderrController.error(initialError);
-        rejectExitCode(initialError);
-        rejectWs(initialError); // Reject the inner WS promise
-      });
-    }).catch(wsError => {
-        // Catch errors from the inner WS promise (already handled by rejectExitCode/stream destroy)
-        this.logger.debug('[GBox SDK exec] WebSocket lifecycle promise rejected:', wsError.message);
+    this._initiateWebSocketConnection({
+      wsUrlString,
+      tty,
+      signal,
+      stdin,
+      stdoutController,
+      stderrController,
+      resolveExitCode,
+      rejectExitCode,
     });
 
-    // IMPORTANT: Return the object with streams/promise immediately
-    return execProcess;
+    return {
+      stdout: stdoutStream,
+      stderr: stderrStream,
+      exitCode: exitCodePromise,
+    };
+  }
+
+  private async _handleStdin(ws: WebSocketClient, input: string | ReadableStream): Promise<void> {
+    logger.debug('Starting stdin handling.');
+    try {
+      if (typeof input === 'string') {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(input);
+        if (data.length > 0) {
+          const copyData = data.slice();
+          await ws.send(copyData.buffer as ArrayBuffer);
+          logger.debug(`[WS] Sent ${data.length} bytes from string stdin.`);
+        }
+      } else if (input instanceof ReadableStream) {
+        const reader = input.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            logger.debug('[WS] stdin stream finished.');
+            break;
+          }
+          if (value && value.length > 0) {
+            if (value instanceof Uint8Array) {
+              const copyData = value.slice();
+              await ws.send(copyData.buffer as ArrayBuffer);
+            } else if (value instanceof ArrayBuffer) {
+              const copyData = new Uint8Array(value).slice();
+              await ws.send(copyData.buffer as ArrayBuffer);
+            } else {
+              const data = new TextEncoder().encode(String(value));
+              await ws.send(data.buffer as ArrayBuffer);
+            }
+            logger.debug(`[WS] Sent data from stdin stream.`);
+          }
+        }
+        reader.releaseLock();
+      }
+      logger.debug('Finished writing stdin. Sending stdin_eof control message.');
+      const eofMsg = JSON.stringify({ type: 'stdin_eof' });
+      await ws.send(eofMsg);
+    } catch (error: any) {
+      logger.error('[WS] Error writing to stdin via WebSocket:', error);
+    }
+  }
+
+  private _processWebSocketMessage(
+    data: ArrayBuffer | string,
+    tty: boolean,
+    stdoutController: ReadableStreamDefaultController,
+    stderrController: ReadableStreamDefaultController,
+    frameBufferState: { buffer: Uint8Array },
+    onExitCodeReceived: (code: number) => void
+  ): void {
+    if (typeof data === 'string') {
+      try {
+        const jsonMessage = JSON.parse(data);
+        const exitMsg = jsonMessage as ExitMessage;
+        if (exitMsg?.type === 'exit' && typeof exitMsg.exitCode === 'number') {
+          logger.debug(`[WS] Received exit message: Code ${exitMsg.exitCode}`);
+          onExitCodeReceived(exitMsg.exitCode);
+        } else {
+          logger.warn(`[WS] Received unexpected JSON text message:`, jsonMessage);
+        }
+      } catch (e) {
+        logger.warn(`[WS] Received non-JSON text message: ${data}`);
+      }
+    } else if (data instanceof ArrayBuffer) {
+      if (data.byteLength > 0) {
+        if (tty) {
+          stdoutController.enqueue(new Uint8Array(data));
+        } else {
+          const newData = new Uint8Array(data);
+          const combined = new Uint8Array(frameBufferState.buffer.length + newData.length);
+          combined.set(frameBufferState.buffer, 0);
+          combined.set(newData, frameBufferState.buffer.length);
+          frameBufferState.buffer = combined;
+
+          frameBufferState.buffer = this._processDockerStreamFrames(
+            frameBufferState.buffer,
+            stdoutController,
+            stderrController
+          );
+        }
+      }
+    } else {
+      logger.warn(`[WS] Received message of unknown type: ${typeof data}`, data);
+    }
+  }
+
+  private _processDockerStreamFrames(
+    currentBuffer: Uint8Array,
+    stdoutController: ReadableStreamDefaultController,
+    stderrController: ReadableStreamDefaultController
+  ): Uint8Array {
+    let buffer = currentBuffer;
+    logger.debug(`[WS] Processing ${buffer.length} bytes in _processDockerStreamFrames.`);
+    while (buffer.length >= 8) {
+      const header = buffer.slice(0, 8);
+      const dataView = new DataView(header.buffer, header.byteOffset, header.byteLength);
+      const streamType = dataView.getUint8(0) as StreamType;
+      const payloadSize = dataView.getUint32(4, false); // Read as big-endian
+      const frameSize = 8 + payloadSize;
+
+      logger.debug(`[WS] Docker frame header: streamType=${streamType}, payloadSize=${payloadSize}, frameSize=${frameSize}, current buffer size=${buffer.length}`);
+
+      if (buffer.length >= frameSize) {
+        const payload = buffer.slice(8, frameSize);
+        if (payload.byteLength > 0) {
+          if (streamType === StreamTypeStdout) {
+            logger.debug(`[WS] Enqueuing ${payload.byteLength} bytes to stdout stream.`);
+            stdoutController.enqueue(payload);
+          } else if (streamType === StreamTypeStderr) {
+            logger.debug(`[WS] Enqueuing ${payload.byteLength} bytes to stderr stream.`);
+            stderrController.enqueue(payload);
+          } else {
+            logger.warn(`[WS] Unknown stream type: ${streamType}`);
+          }
+        }
+        buffer = buffer.slice(frameSize);
+      } else {
+        logger.debug(`[WS] Buffer (${buffer.length} bytes) too small for complete frame (needs ${frameSize} bytes). Waiting for more data.`);
+        break;
+      }
+    }
+    if (buffer.length > 0) {
+      logger.debug(`[WS] Exiting _processDockerStreamFrames with ${buffer.length} bytes remaining in buffer.`);
+    }
+    return buffer;
+  }
+
+  private _initiateWebSocketConnection(params: {
+    wsUrlString: string;
+    tty: boolean;
+    signal?: AbortSignal;
+    stdin?: string | ReadableStream;
+    stdoutController: ReadableStreamDefaultController;
+    stderrController: ReadableStreamDefaultController;
+    resolveExitCode: (code: number) => void;
+    rejectExitCode: (reason?: any) => void;
+  }): void {
+    const {
+      wsUrlString,
+      tty,
+      signal,
+      stdin,
+      stdoutController,
+      stderrController,
+      resolveExitCode,
+      rejectExitCode,
+    } = params;
+
+    new Promise<void>((resolveWsLifecycle, rejectWsLifecycle) => {
+      let receivedExitCode: number | null = null;
+      let frameBufferState = { buffer: new Uint8Array(0) };
+      let wsClientInstance: WebSocketClient | null = null;
+
+      wsClientInstance = new WebSocketClient(
+        wsUrlString,
+        {
+          signal: signal,
+          onOpen: () => {
+            logger.debug('[WS] WebSocket connection opened.');
+            if (stdin && wsClientInstance) {
+              this._handleStdin(wsClientInstance, stdin);
+            }
+          },
+          onMessage: (data: ArrayBuffer | string) => {
+            this._processWebSocketMessage(
+              data,
+              tty,
+              stdoutController,
+              stderrController,
+              frameBufferState,
+              (code) => {
+                receivedExitCode = code;
+              }
+            );
+          },
+          onError: (error: Error) => {
+            logger.error('[WS] WebSocket error:', error);
+            stdoutController.error(error);
+            stderrController.error(error);
+            rejectExitCode(error);
+            rejectWsLifecycle(error);
+          },
+          onClose: (code: number, reason: string, wasClean: boolean) => {
+            logger.debug(
+              `[WS] WebSocket closed. Code: ${code}, Reason: ${reason}, WasClean: ${wasClean}`
+            );
+
+            if (!tty && frameBufferState.buffer.length > 0) {
+              logger.warn(
+                `[WS] WebSocket closed with ${frameBufferState.buffer.length} unprocessed bytes in frame buffer.`
+              );
+            }
+
+            if (receivedExitCode !== null) {
+              resolveExitCode(receivedExitCode);
+              stdoutController.close();
+              stderrController.close();
+              resolveWsLifecycle();
+            } else {
+              const closeError = new Error(
+                `[WS] WebSocket closed (Code: ${code}, Reason: ${reason}, Clean: ${wasClean}) before receiving exit code.`
+              );
+              stdoutController.error(closeError);
+              stderrController.error(closeError);
+              rejectExitCode(closeError);
+              rejectWsLifecycle(closeError);
+            }
+          },
+        }
+      );
+
+      wsClientInstance.connect().catch((initialError) => {
+        logger.error('[WS] Initial WebSocket connection failed:', initialError);
+        stdoutController.error(initialError);
+        stderrController.error(initialError);
+        rejectExitCode(initialError);
+        rejectWsLifecycle(initialError);
+      });
+    }).catch((wsError) => {
+      logger.debug('[WS] WebSocket lifecycle promise rejected:', wsError.message);
+    });
   }
 
   // Helper to construct the full WebSocket URL for the exec command
   private buildExecWsUrl(boxId: string, params: { cmd: string[]; tty: boolean; workingDir?: string }): string {
     const httpUrl = this.httpClient.defaults.baseURL;
     if (!httpUrl) {
-      throw new Error('Cannot determine WebSocket URL: Axios baseURL is not set.');
+      throw new Error('[WS] Cannot determine WebSocket URL: Axios baseURL is not set.');
     }
 
     const { cmd, tty, workingDir } = params;

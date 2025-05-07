@@ -36,7 +36,7 @@ export const handleRunBash = withLogging(
     // Get or create box
     const id = await gbox.boxes.getOrCreateBox({
       boxId,
-      image: config.images.bash,
+      image: config.images.playwright,
       sessionId,
       signal,
     });

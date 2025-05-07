@@ -13,41 +13,22 @@ import {
   GBoxError,
   ConflictError,
 } from '../errors.ts';
-import type { Logger } from '../config.ts'; // Also use 'import type' for interfaces
+import { Logger } from '../logger.ts'; // Import the logger
 
-// Default logger using console (can be replaced with a more sophisticated one)
-const defaultLogger: Logger = {
-  debug: (...args) => console.debug('[GBox SDK]', ...args),
-  info: (...args) => console.info('[GBox SDK]', ...args),
-  warn: (...args) => console.warn('[GBox SDK]', ...args),
-  error: (...args) => console.error('[GBox SDK]', ...args),
-};
-
-// No-op logger for when logging is disabled
-const noOpLogger: Logger = {
-  debug: () => {},
-  info: () => {},
-  warn: () => {},
-  error: () => {},
-};
+const logger = new Logger('Http');
 
 export class Client {
   protected httpClient: AxiosInstance;
-  protected logger: Logger; // Add logger instance variable
 
   // Accept logger in constructor, provide default
-  constructor(httpClient: AxiosInstance, logger?: Logger) {
+  constructor(httpClient: AxiosInstance) { // logger parameter removed
     this.httpClient = httpClient;
-    // Set logger based on input or default
-    this.logger = logger || defaultLogger;
-    // Optional: Add interceptors directly to httpClient for universal request/response logging or error handling
-    // this.httpClient.interceptors.response.use(response => response, this.handleErrorResponse);
   }
 
   // Centralized error handler (can be used as an interceptor or called directly)
   private handleError(error: any): never {
     // Use 'never' as it always throws
-    // this.logger.error('API Request Error:', error); // Commented out to avoid logging the full raw error object
+    logger.error('API Request Error:', error); // Commented out to avoid logging the full raw error object
     if (axios.isAxiosError(error)) {
       const axiosError = error as AxiosError;
       const statusCode = axiosError.response?.status;
@@ -69,26 +50,26 @@ export class Client {
       const ErrorClass = statusCode ? specificErrorMap[statusCode] : undefined;
 
       if (ErrorClass) {
-        this.logger.warn(
+        logger.warn(
           `Request failed (${ErrorClass.name}): ${message}`,
           responseData
         );
         throw new ErrorClass(message, responseData);
       } else if (statusCode && statusCode >= 400 && statusCode < 600) {
-        this.logger.error(
+        logger.error(
           `Request failed (APIError ${statusCode}): ${message}`,
           responseData
         );
         throw new APIError(message, statusCode, responseData);
       } else {
-        this.logger.error(
+        logger.error(
           `Request failed (Network/Unknown Axios Error): ${message}`,
           responseData
         );
         throw new APIError(message, undefined, responseData);
       }
     } else {
-      this.logger.error(
+      logger.error(
         `Unexpected non-Axios error: ${(error as Error).message}`,
         error
       );
@@ -108,8 +89,8 @@ export class Client {
     responseType?: 'json' | 'arraybuffer';
     signal?: AbortSignal;
   }): Promise<AxiosResponse<T>> {
-    this.logger.debug(
-      `Requesting: ${config.method.toUpperCase()} ${config.url}`,
+    logger.debug(
+      `[http] Requesting: ${config.method.toUpperCase()} ${config.url}`,
       { params: config.params, data: config.data }
     ); // Log request details
     try {
@@ -117,7 +98,7 @@ export class Client {
         ...config,
         signal: config.signal,
       });
-      this.logger.debug(`Response: ${response.status} ${response.statusText}`, {
+      logger.debug(`[http] Response: ${response.status} ${response.statusText}`, {
         url: config.url,
       }); // Log success response status
       return response;
@@ -247,7 +228,7 @@ export class Client {
     headers?: Record<string, string>,
     signal?: AbortSignal
   ): Promise<Record<string, string>> {
-    this.logger.debug(`Requesting: HEAD ${path}`, { params });
+    logger.debug(`[http] Requesting: HEAD ${path}`, { params });
     try {
       // Use httpClient directly for HEAD as it doesn't typically have a body to parse
       const response = await this.httpClient.head(path, {
@@ -255,7 +236,7 @@ export class Client {
         headers,
         signal,
       });
-      this.logger.debug(`Response: ${response.status} ${response.statusText}`, {
+      logger.debug(`[http] Response: ${response.status} ${response.statusText}`, {
         url: path,
       });
       // Convert Axios headers to simple Record<string, string>

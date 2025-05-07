@@ -1,5 +1,5 @@
 import { describe, beforeAll, afterAll, test, expect } from 'vitest';
-import { GBoxClient, Box } from '../../src/index';
+import { GBoxClient, Box, LogLevel } from '../../src/index';
 
 // config settings
 const BASE_URL = 'http://localhost:28080';
@@ -60,7 +60,7 @@ describe('BoxApi.exec WebSocket actual call test', () => {
   // create box before all tests
   beforeAll(async () => {
     // initialize client
-    client = new GBoxClient({ baseURL: BASE_URL });
+    client = new GBoxClient({ baseURL: BASE_URL, logLevel: LogLevel.DEBUG });
     
     // clean up old test containers
     const existingBoxes = await client.boxes.list({ label: TEST_LABEL });

@@ -17,11 +17,11 @@ import * as path from 'node:path';
 import * as tar from 'tar'; // Use the installed tar package
 import type { ReadEntry } from 'tar'; // Import specific type
 import { Readable } from 'node:stream'; // For converting ArrayBuffer to stream
-// --- End Node.js imports ---
-// Import Browser related types and models
-// import { BrowserContext } from './browserContext.ts'; // No longer needed here
-// import type { CreateContextParams, CreateContextResult } from '../types/browser.ts'; // No longer needed here
+
 import { BoxBrowserManager } from '../managers/browser.manager.ts'; // Import the new manager
+import { Logger } from '../logger.ts';
+
+const logger = new Logger('Box');
 
 /**
  * Represents a GBox Box instance.
@@ -77,8 +77,9 @@ export class Box {
       if (error instanceof NotFoundError) {
         // Optionally update status or throw a more specific error
         this.attrs.status = 'deleted'; // Example: Mark as deleted
-        console.warn(
-          `[GBox SDK] Failed to reload Box ${this.id}, marked as deleted.`
+        logger.warn(
+          `[Box ID: ${this.id}] Failed to reload, Box not found. Marked as deleted.`,
+          error
         );
       } else {
         // Re-throw other errors
@@ -123,7 +124,8 @@ export class Box {
   ): Promise<{ message: string }> {
     // Note: After deletion, this Box instance becomes stale.
     // Use the getter for id
-    return this.boxApi.deleteBox(this.id, force, signal);
+    const result = await this.boxApi.deleteBox(this.id, force, signal);
+    return result;
   }
 
   /**
@@ -139,8 +141,10 @@ export class Box {
     // Handle cases where API might return 200 OK without an exitCode.
     // Default to -1 (unknown/not provided) if missing, mimicking Python SDK.
     if (response.exitCode === undefined || response.exitCode === null) {
+      logger.debug(`[Box ID: ${this.id}] Run command response missing exitCode, defaulting to -1.`);
       response.exitCode = -1;
     }
+    logger.info(`[Box ID: ${this.id}] Run command completed. Exit code: ${response.exitCode}`);
     return response;
   }
 
@@ -157,7 +161,8 @@ export class Box {
     options?: BoxExecOptions
   ): Promise<BoxExecProcess> {
     // Pass cmd and options directly to the api method
-    return this.boxApi.exec(this.id, cmd, options);
+    const result = await this.boxApi.exec(this.id, cmd, options);
+    return result;
   }
 
   /**
@@ -186,18 +191,23 @@ export class Box {
     targetPath: string,
     signal?: AbortSignal
   ): Promise<BoxExtractArchiveResponse> {
+    logger.debug(`[Box ID: ${this.id}] Attempting copyTo: ${sourcePath} -> ${targetPath}`);
     // Check if source exists using Node.js fs
     try {
       await fs.promises.stat(sourcePath);
+      logger.debug(`[Box ID: ${this.id}] copyTo: Source path ${sourcePath} exists.`);
     } catch (error: any) {
       // Catch specific error type if possible
       if (error.code === 'ENOENT') {
+        logger.error(`[Box ID: ${this.id}] copyTo: Local source path not found: ${sourcePath}`);
         // Node.js error code for Not Found
         throw new Error(`Local source path not found: ${sourcePath}`);
       }
+      logger.error(`[Box ID: ${this.id}] copyTo: Error stating source path ${sourcePath}:`, error);
       throw error; // Re-throw other errors
     }
 
+    logger.debug(`[Box ID: ${this.id}] copyTo: Creating tar archive in memory for ${sourcePath}.`);
     // Create tar archive in memory using the 'tar' package
     // 'tar' creates a stream, we need to collect it into a buffer
     const tarStream = tar.c(
@@ -214,6 +224,7 @@ export class Box {
       chunks.push(chunk instanceof Buffer ? chunk : Buffer.from(chunk));
     }
     const archiveDataBuffer = Buffer.concat(chunks);
+    logger.debug(`[Box ID: ${this.id}] copyTo: Tar archive created in memory, size: ${archiveDataBuffer.length} bytes.`);
     // Convert Node.js Buffer to ArrayBuffer for the API call
     const archiveData = archiveDataBuffer.buffer.slice(
       archiveDataBuffer.byteOffset,
@@ -221,7 +232,8 @@ export class Box {
     );
 
     // Use the getter for id and call the API
-    return this.boxApi.extractArchive(this.id, targetPath, archiveData, signal);
+    const result = await this.boxApi.extractArchive(this.id, targetPath, archiveData, signal);
+    return result;
   }
 
   /**
@@ -244,8 +256,9 @@ export class Box {
       sourcePath,
       signal
     );
-
+    
     if (localPath) {
+      logger.debug(`[Box ID: ${this.id}] copyFrom: Processing localPath: ${localPath}`);
       // Determine if the target is a directory or a file path, and ensure the base directory exists
       let extractBaseDir = localPath;
       let isTargetFile = false;
@@ -257,6 +270,7 @@ export class Box {
           // It exists but is not a directory, treat as file target
           extractBaseDir = path.dirname(localPath);
           isTargetFile = true;
+          logger.debug(`[Box ID: ${this.id}] copyFrom: localPath ${localPath} exists and is a file. Extract base dir: ${extractBaseDir}`);
         }
         // If it's an existing directory, extractBaseDir remains localPath
       } catch (e: any) {
@@ -266,19 +280,24 @@ export class Box {
             // Intended as a file path
             extractBaseDir = path.dirname(localPath);
             isTargetFile = true;
+            logger.debug(`[Box ID: ${this.id}] copyFrom: localPath ${localPath} does not exist, treated as file. Extract base dir: ${extractBaseDir}`);
           } else {
             // Intended as a directory path, extractBaseDir remains localPath
             isTargetFile = false;
+            logger.debug(`[Box ID: ${this.id}] copyFrom: localPath ${localPath} does not exist, treated as directory.`);
           }
           // Ensure the base directory exists (for both file and dir targets)
+          logger.debug(`[Box ID: ${this.id}] copyFrom: Ensuring directory ${extractBaseDir} exists.`);
           await fs.promises.mkdir(extractBaseDir, { recursive: true });
         } else {
+          logger.error(`[Box ID: ${this.id}] copyFrom: Error stating localPath ${localPath}:`, e);
           throw e; // Re-throw other stat errors
         }
       }
 
       // --- Handle file download directly, directory download via tar ---
       if (isTargetFile) {
+        logger.debug(`[Box ID: ${this.id}] copyFrom: Extracting single file to ${localPath}.`);
         // Use tar parser to extract the single file content
         const buffer = Buffer.from(archiveData);
         const readableStream = Readable.from(buffer);
@@ -288,18 +307,22 @@ export class Box {
           let fileStreamOpened = false;
 
           parser.on('entry', (entry: ReadEntry) => {
+            logger.debug(`[Box ID: ${this.id}] copyFrom: Tar entry: ${entry.path}, type: ${entry.type}`);
             // Assuming the first file entry is the one we want
             if (entry.type === 'File' && !fileStreamOpened) {
               fileStreamOpened = true; // Process only the first file entry
+              logger.debug(`[Box ID: ${this.id}] copyFrom: Piping entry ${entry.path} to ${localPath}.`);
               const writeStream = fs.createWriteStream(localPath);
 
               entry
                 .pipe(writeStream)
                 .on('finish', () => {
+                  logger.debug(`[Box ID: ${this.id}] copyFrom: Finished writing file ${localPath}.`);
                   // Need to ensure parser also finishes if needed, but writeStream finish is key
                   resolve();
                 })
                 .on('error', (writeErr: Error) => {
+                  logger.error(`[Box ID: ${this.id}] copyFrom: Failed to write to ${localPath}:`, writeErr);
                   reject(
                     new Error(
                       `Failed to write to ${localPath}: ${writeErr.message}`
@@ -308,14 +331,17 @@ export class Box {
                 });
             } else {
               // Drain other entries (like directories if API includes them unexpectedly)
+              logger.debug(`[Box ID: ${this.id}] copyFrom: Draining tar entry: ${entry.path}`);
               entry.resume();
             }
           });
 
           parser.on('end', () => {
+            logger.debug(`[Box ID: ${this.id}] copyFrom: Tar parser finished.`);
             // Resolve if writeStream hasn't already (e.g., empty tar?)
             // Or potentially reject if no file entry was found?
             if (!fileStreamOpened) {
+              logger.warn(`[Box ID: ${this.id}] copyFrom: Tar parser finished but no file entry was processed for ${localPath}.`);
               // It's possible the archive was empty or didn't contain a file entry.
               // Or maybe the API returned a tar for a directory even when a file path was requested?
               // Resolve for now, but maybe should reject if no file was written?
@@ -325,6 +351,7 @@ export class Box {
           });
 
           parser.on('error', (parseErr: Error) => {
+            logger.error(`[Box ID: ${this.id}] copyFrom: Failed to parse tar archive:`, parseErr);
             reject(
               new Error(`Failed to parse tar archive: ${parseErr.message}`)
             );
@@ -333,6 +360,7 @@ export class Box {
           readableStream.pipe(parser);
         });
       } else {
+        logger.debug(`[Box ID: ${this.id}] copyFrom: Extracting archive to directory ${extractBaseDir}.`);
         // Extract the archive using the 'tar' package for directories
         const buffer = Buffer.from(archiveData);
         const readableStream = Readable.from(buffer);
@@ -342,16 +370,23 @@ export class Box {
             strip: 0, // Don't strip components, handle potential nesting manually if needed
           });
 
-          extractor.on('finish', resolve);
-          extractor.on('error', reject);
+          extractor.on('finish', () => {
+            logger.debug(`[Box ID: ${this.id}] copyFrom: Finished extracting archive to ${extractBaseDir}.`);
+            resolve();
+          });
+          extractor.on('error', (extractErr: Error) => {
+            logger.error(`[Box ID: ${this.id}] copyFrom: Failed to extract archive to ${extractBaseDir}:`, extractErr);
+            reject(extractErr);
+          });
 
           readableStream.pipe(extractor);
         });
       }
       // --- End handling ---
-
+      logger.info(`[Box ID: ${this.id}] copyFrom: Successfully copied ${sourcePath} to ${localPath}.`);
       return; // Return void when extracting locally
     } else {
+      logger.debug(`[Box ID: ${this.id}] copyFrom: No localPath provided, returning raw archive data.`);
       // Return raw ArrayBuffer if no local path is provided
       return archiveData;
     }
@@ -366,7 +401,8 @@ export class Box {
     signal?: AbortSignal
   ): Promise<Record<string, string>> {
     // Use the getter for id
-    return this.boxApi.headArchive(this.id, path, signal);
+    const result = await this.boxApi.headArchive(this.id, path, signal);
+    return result;
   }
 
   /**
@@ -374,7 +410,8 @@ export class Box {
    * @returns A BoxBrowserManager instance scoped to this Box.
    */
   initBrowser(): BoxBrowserManager {
-    return new BoxBrowserManager(this.id, this.browserApi);
+    const manager = new BoxBrowserManager(this.id, this.browserApi);
+    return manager;
   }
 
   // Potentially add listBrowserContexts, getBrowserContext in the future if API supports
