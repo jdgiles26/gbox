@@ -1,4 +1,5 @@
 import WebSocket from 'isomorphic-ws';
+import { logger } from '../logger.ts'; // Import logger
 
 // Define interfaces for event types based on expected properties
 interface WebSocketMessageEvent {
@@ -45,12 +46,11 @@ export class WebSocketClient implements IWebSocketClient {
   private resolveConnectionPromise!: () => void;
   private rejectConnectionPromise!: (reason?: any) => void;
   private connectionEstablished = false;
-  private logger: Pick<Console, 'debug' | 'info' | 'warn' | 'error'>; // Added logger
+  // private logger: Logger; // logger instance variable removed
 
-  constructor(url: string, options: WebSocketClientOptions = {}, logger: Pick<Console, 'debug' | 'info' | 'warn' | 'error'> = console) {
+  constructor(url: string, options: WebSocketClientOptions = {} /*, logger: Logger = defaultLogger */) { // logger parameter removed
     this.connectionUrl = url;
     this.options = options;
-    this.logger = logger; // Store logger
     this.connectionPromise = new Promise((resolve, reject) => {
       this.resolveConnectionPromise = resolve;
       this.rejectConnectionPromise = reject;
@@ -64,23 +64,23 @@ export class WebSocketClient implements IWebSocketClient {
    */
   async connect(): Promise<void> {
     if (this.ws && this.ws.readyState !== WebSocket.CLOSED) {
-       this.logger.warn('[WebSocketClient] WebSocket connection already established or in progress.');
+       logger.warn('[WS] WebSocket connection already established or in progress.');
        return this.connectionPromise;
     }
 
     this.connectionEstablished = false;
-    this.logger.debug(`[WebSocketClient] Connecting to ${this.connectionUrl}`);
+    logger.debug(`[WS] Connecting to ${this.connectionUrl}`);
     this.ws = new WebSocket(this.connectionUrl);
     this.ws.binaryType = 'arraybuffer';
 
     const handleAbort = () => {
-      this.logger.debug('[WebSocketClient] Abort signal received.');
+      logger.debug('[WS] Abort signal received.');
       if (this.ws && (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN)) {
         this.ws.close(1000, 'Aborted by user');
       }
        // Reject the connection promise only if connection wasn't established yet
        if (!this.connectionEstablished) {
-           this.rejectConnectionPromise(new Error('WebSocket connection aborted by user signal before opening.'));
+           this.rejectConnectionPromise(new Error('[WS] WebSocket connection aborted by user signal before opening.'));
        }
     };
 
@@ -103,7 +103,7 @@ export class WebSocketClient implements IWebSocketClient {
     };
 
     this.ws.onopen = () => {
-      this.logger.debug('[WebSocketClient] WebSocket opened.');
+      logger.debug('[WS] WebSocket opened.');
       this.connectionEstablished = true;
       cleanupAbortListener();
       this.options.onOpen?.();
@@ -125,7 +125,7 @@ export class WebSocketClient implements IWebSocketClient {
       if (event.error) {
          (error as any).originalError = event.error;
       }
-      this.logger.error('[WebSocketClient] WebSocket error:', error);
+      logger.error('[WS] WebSocket error:', error);
       cleanupAbortListener();
        if (!this.connectionEstablished) {
            // If connection never established, reject the connection promise
@@ -138,13 +138,13 @@ export class WebSocketClient implements IWebSocketClient {
 
     // Use the defined interface for the event type
     this.ws.onclose = (event: WebSocketCloseEvent) => {
-      this.logger.debug(
-        `[WebSocketClient] WebSocket closed. Code: ${event.code}, Reason: ${event.reason}, WasClean: ${event.wasClean}`
+      logger.debug(
+        `[WS] WebSocket closed. Code: ${event.code}, Reason: ${event.reason}, WasClean: ${event.wasClean}`
       );
       cleanupAbortListener();
        // Reject connection promise only if it closed uncleanly *before* opening
        if (!this.connectionEstablished && !event.wasClean && event.code !== 1000) {
-            this.rejectConnectionPromise(new Error(`WebSocket closed unexpectedly before opening. Code: ${event.code}, Reason: ${event.reason}`));
+            this.rejectConnectionPromise(new Error(`[WS] WebSocket closed unexpectedly before opening. Code: ${event.code}, Reason: ${event.reason}`));
        }
       // Always call the onClose handler if provided
       this.options.onClose?.(event.code, event.reason, event.wasClean);
@@ -157,15 +157,15 @@ export class WebSocketClient implements IWebSocketClient {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(data);
     } else {
-      this.logger.warn('[WebSocketClient] WebSocket is not open, cannot send data.');
+      logger.warn('[WS] WebSocket is not open, cannot send data.');
       // --- Modification Start: Optionally throw error ---
       if (options?.throwIfNotOpen) {
-        throw new Error('WebSocket is not open, cannot send data.');
+        throw new Error('[WS] WebSocket is not open, cannot send data.');
       }
     }
   }
 
-  close(code: number = 1000, reason: string = 'Connection closed by client'): void {
+  close(code: number = 1000, reason: string = '[WS] Connection closed by client'): void {
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
       this.ws.close(code, reason);
     }

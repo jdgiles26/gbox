@@ -6,6 +6,7 @@ import type {
   FileWriteApiResponse,
 } from '../types/file.ts'; // Use import type
 import { NotFoundError } from '../errors.ts'; // Add .ts
+import { logger } from '../logger.ts';
 
 const API_PREFIX = '/api/v1/files'; // Base path for file operations
 
@@ -38,8 +39,8 @@ export class FileApi extends Client {
           fileInfo.isDir = fileInfo.type === 'dir'; // Example based on type field
           return fileInfo;
         } catch (e) {
-          console.error(
-            `[GBox SDK] Failed to parse x-gbox-file-stat header for path ${path}: ${e}`
+          logger.error(
+            `Failed to parse x-gbox-file-stat header for path ${path}: ${e}`
           );
           // Decide how to handle parse error: return null, throw specific error?
           return null;

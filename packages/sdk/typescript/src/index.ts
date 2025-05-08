@@ -2,7 +2,7 @@
 export { GBoxClient } from './client.ts';
 
 // Export configuration types/interfaces if needed for external use
-export type { GBoxClientConfig, Logger } from './config.ts';
+export type { GBoxClientConfig /*, Logger */ } from './config.ts';
 
 // Export managers if direct access is desired (though usually accessed via client)
 // export { BoxManager } from './managers/boxManager.ts';
@@ -27,3 +27,6 @@ export { FileManager } from './managers/file.manager.ts';
 // Export new browser-related exports
 export * from './api/browser.api.ts';
 export * from './types/browser.ts';
+
+// Re-export SdkLogger and LogLevel for external use
+export { logger } from './logger.ts';

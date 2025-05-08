@@ -24,6 +24,5 @@ export const config = {
     python: process.env.PY_IMG || "babelcloud/gbox-python",
     playwright: process.env.PW_IMG || "babelcloud/gbox-playwright",
     typescript: process.env.TS_IMG || "babelcloud/gbox-typescript",
-    bash: process.env.SH_IMG || "ubuntu",
   },
 } as const;

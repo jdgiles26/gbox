@@ -1,6 +1,6 @@
 import { describe, beforeAll, afterAll, test, expect } from 'vitest';
 import { GBoxClient, Box } from '../../src/index';
-
+import winston from 'winston';
 // config settings
 const BASE_URL = 'http://localhost:28080';
 const TEST_IMAGE = 'alpine:latest';
