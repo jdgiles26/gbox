@@ -13,9 +13,7 @@ import {
   GBoxError,
   ConflictError,
 } from '../errors.ts';
-import { Logger } from '../logger.ts'; // Import the logger
-
-const logger = new Logger('Http');
+import { logger } from '../logger.ts'; // Import the logger
 
 export class Client {
   protected httpClient: AxiosInstance;

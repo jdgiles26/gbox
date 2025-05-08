@@ -1,7 +1,5 @@
 import WebSocket from 'isomorphic-ws';
-import { Logger } from '../logger.ts'; // Import logger
-
-const logger = new Logger('WebSocket');
+import { logger } from '../logger.ts'; // Import logger
 
 // Define interfaces for event types based on expected properties
 interface WebSocketMessageEvent {

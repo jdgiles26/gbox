@@ -6,9 +6,7 @@ import type {
   FileWriteApiResponse,
 } from '../types/file.ts'; // Use import type
 import { NotFoundError } from '../errors.ts'; // Add .ts
-import { Logger } from '../logger.ts';
-
-const logger = new Logger('FileApi');
+import { logger } from '../logger.ts';
 
 const API_PREFIX = '/api/v1/files'; // Base path for file operations
 

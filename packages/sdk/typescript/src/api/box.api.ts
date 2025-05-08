@@ -18,9 +18,7 @@ import type {
 } from '../types/box.ts';
 import { StreamTypeStdout, StreamTypeStderr } from '../types/box.ts';
 import { WebSocketClient } from './ws-client.ts';
-import { Logger } from '../logger.ts';
-
-const logger = new Logger('BoxApi');
+  import { logger } from '../logger.ts';
 
 const API_PREFIX = '/api/v1/boxes';
 

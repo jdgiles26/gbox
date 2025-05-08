@@ -19,9 +19,7 @@ import type { ReadEntry } from 'tar'; // Import specific type
 import { Readable } from 'node:stream'; // For converting ArrayBuffer to stream
 
 import { BoxBrowserManager } from '../managers/browser.manager.ts'; // Import the new manager
-import { Logger } from '../logger.ts';
-
-const logger = new Logger('Box');
+import { logger } from '../logger.ts';
 
 /**
  * Represents a GBox Box instance.

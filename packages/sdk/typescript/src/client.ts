@@ -1,13 +1,13 @@
 import axios from 'axios';
 import type { AxiosInstance } from 'axios';
 import { DEFAULT_BASE_URL, DEFAULT_TIMEOUT } from './config.ts';
-import type { GBoxClientConfig } from './config.ts'; // Logger type import removed
+import type { GBoxClientConfig } from './config.ts';
 import { BoxManager } from './managers/box.manager.ts';
 import { FileManager } from './managers/file.manager.ts';
 import { BoxApi } from './api/box.api.ts';
 import { FileApi } from './api/file.api.ts';
 import { BrowserApi } from './api/browser.api.ts';
-import { Logger } from './logger.ts';
+import { setLoggerTransports, setLoggerLevel } from './logger.ts';
 
 export class GBoxClient {
   private readonly httpClient: AxiosInstance;
@@ -17,13 +17,21 @@ export class GBoxClient {
   readonly boxes: BoxManager;
   readonly files: FileManager;
   readonly config: GBoxClientConfig;
-  // readonly logger: Logger; // logger instance variable removed
 
   constructor(config: GBoxClientConfig = {}) {
     this.config = config;
 
-    if (config.logLevel !== undefined) {
-      Logger.setGlobalLogLevel(config.logLevel); // Use SdkLogger directly
+    // Configure logger if logger config is provided
+    if (config.logger) {
+      // Configure logger level if provided
+      if (config.logger.level) {
+        setLoggerLevel(config.logger.level);
+      }
+
+      // Configure logger transports if provided
+      if (config.logger.transports && config.logger.transports.length > 0) {
+        setLoggerTransports(config.logger.transports);
+      }
     }
 
     const baseURL = config.baseURL || DEFAULT_BASE_URL;

@@ -2,7 +2,8 @@
 
 [![npm version](https://badge.fury.io/js/%40gru.ai%2Fgbox.svg)](https://badge.fury.io/js/%40gru.ai%2Fgbox)
 
-Node.js SDK for Gru gbox. Gbox provides a self-hostable sandbox environment designed for AI agents, offering capabilities like terminal access, file management, and browser interaction.
+Node.js SDK for Gru gbox. gbox is an open source project that provides a self-hostable sandbox for Agents to execute commands, read/write files, browse the web, operate iOS/Android. The sandbox can be used as a computer/phone/pad for agent. See "Features" section for details.
+
 This SDK allows Node.js applications to programmatically manage GBox resources, primarily the execution environments (Boxes) and the shared file volume, enabling seamless integration with agent workflows.
 
 ## Installation
@@ -32,56 +33,38 @@ import { GBoxClient } from '@gru.ai/gbox';
 const GBOX_URL = process.env.GBOX_URL || 'http://localhost:28080';
 
 // Initialize with default logger (console)
-const gbox = new GBoxClient({ baseURL: GBOX_URL });
-
-// Or initialize with a custom logger or no logger
-// import type { Logger } from '@gru.ai/gbox';
-// const myLogger: Logger = { debug: ()=>{}, info: ()=>{}, warn: ()=>{}, error: ()=>{} };
-// const gboxWithLogger = new GBoxClient({ baseURL: GBOX_URL, logger: myLogger });
+const gbox = new GBoxClient({ baseURL: GBOX_URL, logger: { level: 'none', transports: [] } });
 ```
 
 ### 2. Box Management
 
 ```typescript
-import { GBoxClient, Box } from '@gru.ai/gbox';
-const gbox = new GBoxClient({ baseURL: GBOX_URL }); // Assumes client is initialized
-
 async function manageBoxes() {
     // Create a new box
     const newBox = await gbox.boxes.create({
         image: 'alpine:latest',
         labels: { project: 'my-app' }
     });
-    console.log(`Created box: ${newBox.id}`);
 
     // Get a box by ID
     const fetchedBox = await gbox.boxes.get(newBox.id);
-    console.log(`Fetched box status: ${fetchedBox.status}`);
 
     // List boxes (optionally filter by labels, status, etc.)
     const allBoxes = await gbox.boxes.list();
-    console.log(`Total boxes: ${allBoxes.length}`);
 
     const projectBoxes = await gbox.boxes.list({ label: 'project=my-app' });
-    console.log(`Boxes for project 'my-app': ${projectBoxes.length}`);
     
     // Delete a box (use force=true to remove associated resources)
     await newBox.delete(true);
-    console.log(`Deleted box: ${newBox.id}`);
     
     // Delete all boxes (use with caution!)
-    // await gbox.boxes.delete_all({ force: true }); 
+    await gbox.boxes.delete_all({ force: true }); 
 }
-
-manageBoxes();
 ```
 
 ### 3. Box Lifecycle & Command Execution
 
 ```typescript
-import { GBoxClient, Box, APIError } from '@gru.ai/gbox';
-const gbox = new GBoxClient({ baseURL: GBOX_URL }); // Assumes client is initialized
-
 async function useBox(boxId: string) { // Pass a valid box ID
     try {
         const box = await gbox.boxes.get(boxId);
@@ -89,16 +72,36 @@ async function useBox(boxId: string) { // Pass a valid box ID
         // Start the box if not running
         if (box.status !== 'running') {
             await box.start();
-             await new Promise(resolve => setTimeout(resolve, 1500)); // Wait a bit
+            await new Promise(resolve => setTimeout(resolve, 1500)); // Wait a bit
         }
-        console.log(`Box ${box.id} is running.`);
+
 
         // Run a command
         const runResult = await box.run(['pwd']);
-        console.log(`pwd stdout: ${runResult.stdout?.trim()}`);
-        
         const runResultComplex = await box.run(['sh', '-c', 'echo "Output via sh" && ls /tmp']);
-        console.log(`sh stdout: ${runResultComplex.stdout?.trim()}`);
+
+        // Exec
+        const stream = await box.exec(['echo', 'Hello from exec']);
+
+        // Exec with stdin
+        const stdinContent = 'hello from stdin';
+    
+        const execStream = await box.exec(
+        ['cat'],
+        { stdin: stdinContent }
+        );
+
+        // Exec with tty
+        const execStreamTty = await box.exec(
+        ['echo', 'tty test'],
+        { tty: true }
+        );
+
+        // Exec with working directory
+        const execProcess = await box.exec(
+        ['cat', 'testfile.txt'], 
+        { workingDir: '/tmp/test-workdir' }
+        );
 
         // Stop the box
         await box.stop({ timeout: 5 });
@@ -170,18 +173,14 @@ const gbox = new GBoxClient({ baseURL: GBOX_URL }); // Assumes client is initial
 
 async function useBrowser(box: Box) { // Pass a running Box object with a browser image
     const localTempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'gbox-browser-'));
-    console.log(`Using temp dir: ${localTempDir}`);
-
     try {
         const browser = box.initBrowser();
         const context = await browser.createContext();
         const page = await context.createPage({ url: 'https://example.com' });
-        console.log(`Navigated to: ${await page.getUrl()}, Title: ${await page.getTitle()}`);
 
         const screenshotResult = await page.screenshot({ outputFormat: 'base64' });
         const screenshotPath = path.join(localTempDir, 'screenshot.png.b64');
         await fs.promises.writeFile(screenshotPath, screenshotResult.data);
-        console.log(`Screenshot saved (base64) to ${screenshotPath}`);
 
         await context.close();
 
@@ -193,10 +192,6 @@ async function useBrowser(box: Box) { // Pass a running Box object with a browse
     }
 }
 ```
-
-## API Documentation
-
-*(TODO: Link to generated API documentation if available, e.g., using TypeDoc)*
 
 ## License
 

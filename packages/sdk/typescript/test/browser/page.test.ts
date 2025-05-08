@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { GBoxClient, Box, APIError, BrowserContext, BrowserPage, Logger } from '../../src/index.ts'; // Adjust path as necessary
+import { GBoxClient, Box, APIError, BrowserContext, BrowserPage } from '../../src/index.ts'; // Adjust path as necessary
 import type { BoxCreateOptions } from '../../src/types/box.ts';
+import { logger } from '../../src/logger.ts';
 
-const logger = new Logger('BrowserPageTest');
 const GBOX_URL = process.env.GBOX_URL || 'http://localhost:28080';
 const BROWSER_IMAGE = process.env.GBOX_BROWSER_IMAGE || 'babelcloud/gbox-playwright'; // Use an env var for the image
 

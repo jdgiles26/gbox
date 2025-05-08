@@ -63,6 +63,8 @@
   },
   "dependencies": {
     "@types/tar": "^6.1.13",
-    "tar": "^7.4.3"
+    "isomorphic-ws": "^5.0.0",
+    "tar": "^7.4.3",
+    "winston": "^3.17.0"
   }
 }

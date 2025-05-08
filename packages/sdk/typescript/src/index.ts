@@ -29,4 +29,4 @@ export * from './api/browser.api.ts';
 export * from './types/browser.ts';
 
 // Re-export SdkLogger and LogLevel for external use
-export { Logger, LogLevel } from './logger.ts';
+export { logger } from './logger.ts';

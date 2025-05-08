@@ -1,112 +1,43 @@
-export enum LogLevel {
-  NONE,  // 0
-  ERROR, // 1
-  WARN,  // 2
-  INFO,  // 3
-  DEBUG, // 4
+import winston, { format } from 'winston';
+
+const { combine, timestamp, printf, colorize } = format; // 解构 format 中的方法
+
+export const logger = winston.createLogger({
+  level: 'debug', // Default level
+  format: combine(
+    colorize(),
+    timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    printf(info => `${info.timestamp} ${info.level}: ${info.message}`)
+  ),
+  transports: [
+    new winston.transports.Console() // Default transport
+  ],
+});
+
+/**
+ * Sets the transports for the global logger.
+ * This will remove all existing transports and add the new ones.
+ * @param transports Array of Winston transports.
+ */
+export function setLoggerTransports(transports: winston.transport[]): void {
+  // Remove existing transports
+  // Iterating backwards and removing is safer if the transports array is modified during iteration by winston itself,
+  // though for winston.logger.transports, it's typically a direct array manipulation.
+  while (logger.transports.length > 0) {
+    logger.remove(logger.transports[0]);
+  }
+
+  // Add new transports
+  transports.forEach(transport => {
+    logger.add(transport);
+  });
 }
 
-export class Logger {
-  public static Level = LogLevel;
-  private static globalLogLevel: LogLevel = LogLevel.INFO;
+/**
+ * Sets the level for the global logger.
+ * @param level The logging level (e.g., 'info', 'debug', 'warn', 'error').
+ */
+export function setLoggerLevel(level: string): void {
+  logger.level = level;
+}
 
-  private instanceLogLevel?: LogLevel;
-  private _name?: string;
-
-  constructor(name?: string) {
-    this._name = name;
-  }
-
-  // Helper to compare log levels
-  private getLevelValue(level: LogLevel): number {
-    return level as number;
-  }
-
-  private getLevelString(level: LogLevel): string {
-    switch (level) {
-      case LogLevel.DEBUG:
-        return 'DEBUG';
-      case LogLevel.INFO:
-        return 'INFO';
-      case LogLevel.WARN:
-        return 'WARN';
-      case LogLevel.ERROR:
-        return 'ERROR';
-      case LogLevel.NONE:
-        return 'NONE';
-      default:
-        return 'UNKNOWN';
-    }
-  }
-
-  /**
-   * Sets the global log level for all Logger instances that do not have an instance-specific level set.
-   * @param level The desired global log level.
-   */
-  public static setGlobalLogLevel(level: LogLevel): void {
-    Logger.globalLogLevel = level;
-  }
-
-  /**
-   * Gets the current global log level.
-   * @returns The current global log level.
-   */
-  public static getGlobalLogLevel(): LogLevel {
-    return Logger.globalLogLevel;
-  }
-
-  /**
-   * Sets the log level for this specific Logger instance.
-   * This will override the global log level for this instance.
-   * @param level The desired log level for this instance.
-   */
-  public setLogLevel(level: LogLevel): void {
-    this.instanceLogLevel = level;
-  }
-
-  /**
-   * Clears the instance-specific log level for this Logger.
-   * After calling this, the instance will use the global log level.
-   */
-  public clearLogLevel(): void {
-    this.instanceLogLevel = undefined;
-  }
-
-  /**
-   * Gets the effective log level for this Logger instance.
-   * It returns the instance-specific log level if set, otherwise falls back to the global log level.
-   * @returns The effective log level.
-   */
-  public getLogLevel(): LogLevel {
-    return this.instanceLogLevel ?? Logger.globalLogLevel;
-  }
-
-  private log(level: LogLevel, consoleMethod: (...args: any[]) => void, ...args: any[]): void {
-    const effectiveLevel = this.getLogLevel();
-    if (this.getLevelValue(effectiveLevel) >= this.getLevelValue(level)) {
-      const timestamp = new Date().toISOString();
-      const levelString = this.getLevelString(level);
-      consoleMethod(`[${timestamp}] [${levelString}]`, ...args);
-    }
-  }
-
-  public debug(...args: any[]): Logger {
-    this.log(LogLevel.DEBUG, console.debug, ...args);
-    return this;
-  }
-
-  public info(...args: any[]): Logger {
-    this.log(LogLevel.INFO, console.info, ...args);
-    return this;
-  }
-
-  public warn(...args: any[]): Logger {
-    this.log(LogLevel.WARN, console.warn, ...args);
-    return this;
-  }
-
-  public error(...args: any[]): Logger {
-    this.log(LogLevel.ERROR, console.error, ...args);
-    return this;
-  }
-} 
