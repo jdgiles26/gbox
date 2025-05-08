@@ -2,7 +2,7 @@ import { withLogging } from "../utils.js";
 import { config } from "../config.js";
 import { Gbox } from "../service/index.js";
 import { z } from "zod";
-import type { Logger } from '../service/gbox.instance.js';
+import type { Logger } from '../mcp-logger.js';
 
 export const RUN_BASH_TOOL = "run-bash";
 export const RUN_BASH_DESCRIPTION = `Run Bash commands in a sandbox. 

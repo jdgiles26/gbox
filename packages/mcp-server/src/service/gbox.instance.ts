@@ -1,4 +1,3 @@
-import type { Logger } from '@gru.ai/gbox';
 import {
     GBoxClient,
     Box,
@@ -15,23 +14,16 @@ import {
     BoxBrowserManager,
     FileManager,
     GBoxFile,
-} from '@gru.ai/gbox';
+} from "@gru.ai/gbox";
 
 const GBOX_URL = process.env.GBOX_URL || 'http://localhost:28080';
-
-const noOpLogger: Logger = {
-    debug: () => {},
-    info: () => {},
-    warn: () => {},
-    error: () => {},
-};
 
 export const FILE_SIZE_LIMITS = {
     TEXT: 1024 * 1024, // 1MB for text files
     BINARY: 5 * 1024 * 1024, // 5MB for binary files (images, audio)
 } as const;
 
-const gbox = new GBoxClient({ baseURL: GBOX_URL, logger: noOpLogger });
+const gbox = new GBoxClient({ baseURL: GBOX_URL, logger: { level: 'none', transports: [] } });
 
 export {
     gbox,
@@ -42,7 +34,6 @@ export {
     NotFoundError,
     BrowserPage,
     BrowserContext,
-    type Logger,
     type BoxRunResponse,
     type BoxRunOptions,
     type BoxListFilters,

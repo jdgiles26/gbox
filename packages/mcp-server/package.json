@@ -25,7 +25,7 @@
   "author": "BabelCloud",
   "license": "Apache-2.0",
   "dependencies": {
-    "@gru.ai/gbox": "0.0.2",
+    "@gru.ai/gbox": "0.0.3",
     "@modelcontextprotocol/sdk": "^1.7.0",
     "axios": "^1.8.4",
     "dotenv-defaults": "^5.0.2",

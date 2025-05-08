@@ -1,6 +1,6 @@
 {
   "name": "@gru.ai/gbox",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Node.js SDK for Gru gbox. Gbox provides a self-hostable sandbox environment designed for AI agents, offering capabilities like terminal access, file management, and browser interaction. \nThis SDK allows Node.js applications to programmatically manage GBox resources, primarily the execution environments (Boxes) and the shared file volume, enabling seamless integration with agent workflows.",
   "type": "module",
   "main": "dist/index.js",

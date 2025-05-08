@@ -2,7 +2,7 @@ import { withLogging } from "../utils.js";
 import { config } from "../config.js";
 import { Gbox } from "../service/index.js";
 import { z } from "zod";
-import type { Logger } from '../service/gbox.instance.js';
+import type { Logger } from '../mcp-logger.js';
 
 export const RUN_PYTHON_TOOL = "run-python";
 export const RUN_PYTHON_DESCRIPTION = `Run Python code in a sandbox. 
