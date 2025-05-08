@@ -4,7 +4,7 @@ import {
   withLogging,
   withLoggingResourceTemplate,
 } from "./utils.js";
-import type { Logger } from "./service/gbox.instance.js";
+import type { Logger } from "./mcp-logger.js";
 
 // Box interface
 interface Box {

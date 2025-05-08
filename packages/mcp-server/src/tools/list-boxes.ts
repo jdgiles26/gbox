@@ -1,6 +1,6 @@
 import { withLogging } from "../utils.js";
 import { Gbox } from "../service/index.js";
-import type { Logger } from '../service/gbox.instance.js';
+import type { Logger } from '../mcp-logger.js';
 
 export const LIST_BOXES_TOOL = "list-boxes";
 export const LIST_BOXES_DESCRIPTION = "List all boxes.";

@@ -1,5 +1,11 @@
-import type { Logger } from "./service/gbox.instance.js";
 import type { LogFn } from "./types";
+
+export interface Logger {
+  debug(message: string, ...args: any[]): void;
+  info(message: string, ...args: any[]): void;
+  warn(message: string, ...args: any[]): void;
+  error(message: string, ...args: any[]): void;
+}
 
 export class MCPLogger implements Logger {
   constructor(private logFn: LogFn) {}

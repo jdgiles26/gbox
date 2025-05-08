@@ -2,7 +2,8 @@ import { z } from "zod";// Import type guard if needed
 import { withLogging } from "../utils.js"; // Added import
 import { config } from "../config.js"; // Added import
 import { Gbox } from "../service/index.js";
-import { BrowserPage, BrowserContext, BoxBrowserManager, type VisionScreenshotResult, type VisionScreenshotParams, type Logger } from "../service/gbox.instance.js";
+import { BrowserPage, BrowserContext, BoxBrowserManager, type VisionScreenshotResult, type VisionScreenshotParams } from "../service/gbox.instance.js";
+import type { Logger } from '../mcp-logger.js';
 
 // Define the Zod schema for the tool's parameters, including name and description
 export const ViewUrlAsSchema = z.object({

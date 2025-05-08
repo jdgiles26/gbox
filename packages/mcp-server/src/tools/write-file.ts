@@ -1,6 +1,6 @@
 import { withLogging } from "../utils.js";
 import { Gbox } from "../service/index.js";
-import type { Logger } from '../service/gbox.instance.js';
+import type { Logger } from '../mcp-logger.js';
 import { z } from "zod";
 
 export const WRITE_FILE_TOOL = "write-file";

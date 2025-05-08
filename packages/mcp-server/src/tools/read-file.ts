@@ -2,7 +2,8 @@ import { withLogging } from "../utils.js";
 import { config } from "../config.js";
 import { Gbox } from "../service/index.js";
 import { z } from "zod";
-import { GBoxFile, Logger, FILE_SIZE_LIMITS } from "../service/gbox.instance.js";
+import { GBoxFile, FILE_SIZE_LIMITS } from "../service/gbox.instance.js";
+import type { Logger } from '../mcp-logger.js';
 
 export const READ_FILE_TOOL = "read-file";
 export const READ_FILE_DESCRIPTION = `Read a file from the API server.
