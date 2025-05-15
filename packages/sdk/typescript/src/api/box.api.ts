@@ -18,9 +18,19 @@ import type {
 } from '../types/box.ts';
 import { StreamTypeStdout, StreamTypeStderr } from '../types/box.ts';
 import { WebSocketClient } from './ws-client.ts';
-  import { logger } from '../logger.ts';
-
+import { logger } from '../logger.ts';
+import fs from 'fs';
 const API_PREFIX = '/api/v1/boxes';
+
+export class ImagePullInProgressError extends Error {
+  imageName: string;
+  
+  constructor(message: string, imageName: string) {
+    super(message);
+    this.name = 'ImagePullInProgressError';
+    this.imageName = imageName;
+  }
+}
 
 export class BoxApi extends Client {
   /**
@@ -75,6 +85,31 @@ export class BoxApi extends Client {
   /**
    * Create a new box.
    * POST /api/v1/boxes
+   * 
+   * @param options - Box creation options
+   * @param options.timeout - Duration string (e.g., '30s', '1m') for image pull timeout. 
+   *                          If specified and the image doesn't exist locally, the API will:
+   *                          1. Start an async image pull
+   *                          2. Return a response with imagePullStatus information instead of throwing
+   *                          3. The client should monitor or retry creation after waiting
+   * @param signal - Optional AbortSignal to cancel the request
+   * @returns The created box data, or a response with imagePullStatus if image is being pulled
+   * 
+   * @example
+   * ```typescript
+   * // Create a box with timeout
+   * const response = await client.boxes.create({
+   *   image: "my-image:latest",
+   *   timeout: "30s" // Wait up to 30 seconds for image pull
+   * });
+   * 
+   * if (response.imagePullStatus?.inProgress) {
+   *   console.log(`Image ${response.imagePullStatus.imageName} is being pulled: ${response.imagePullStatus.message}`);
+   *   // Implement retry logic or notify user to try again
+   * } else {
+   *   console.log("Box created successfully:", response.id);
+   * }
+   * ```
    */
   async create(
     options: BoxCreateOptions,
@@ -91,17 +126,34 @@ export class BoxApi extends Client {
     if (options.workingDir) {
       apiOptions.workingDir = options.workingDir;
     }
-    const response = await super.post<BoxCreateResponse>(
-      API_PREFIX,
-      apiOptions,
-      undefined,
-      undefined,
-      signal
-    );
+    
+    const timeoutParam = options.timeout;
+    if (timeoutParam) {
+      delete apiOptions.timeout; 
+    }
+    
+    const params: Record<string, string> = {};
+    if (timeoutParam) {
+      params.timeout = timeoutParam;
+    }
 
-    const mappedResponse = this.mapLabels(response);
+      const responseData = await super.post<BoxCreateResponse>(
+        API_PREFIX,
+        apiOptions,
+        params,
+        undefined, // headers
+        signal
+      );
 
-    return mappedResponse;
+      // Check if responseData indicates ImagePullInProgress
+      // This assumes that if the server responds with 202 and a specific body for ImagePullInProgress,
+      // super.post() will return that body as responseData without throwing an error for the 202 status.
+      if (responseData.code! === 'ImagePullInProgress') {
+        return responseData;
+      }
+
+      // Otherwise, it's treated as a regular successful box creation (e.g., 201 Created)
+      return this.mapLabels(responseData);
   }
 
   /**
