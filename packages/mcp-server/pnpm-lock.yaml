@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@gru.ai/gbox':
-        specifier: 0.0.3
-        version: 0.0.3(ws@8.18.2)
+        specifier: 0.0.4
+        version: 0.0.4(ws@8.18.2)
       '@modelcontextprotocol/sdk':
         specifier: ^1.7.0
         version: 1.7.0
@@ -380,8 +380,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@gru.ai/gbox@0.0.3':
-    resolution: {integrity: sha512-KTBUXU6Nmevg0aSjI4He2MUUK6bRanUKVI4yvWm+CO1/UtOrWZ8U/2nQpw/MHTz9JOCIKI/ULLaMmQyrj6YDrA==}
+  '@gru.ai/gbox@0.0.4':
+    resolution: {integrity: sha512-7L9l1donaB2nlp3yiZMlKgt5X1L2AiwqBtohG4uyOimHnRkDrbhaVT2p9GLevsiNH7g/Hgjy3IUOelLKADdJWg==}
 
   '@isaacs/cliui@8.0.2':
     resolution: {integrity: sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA==}
@@ -1808,7 +1808,7 @@ snapshots:
   '@esbuild/win32-x64@0.25.1':
     optional: true
 
-  '@gru.ai/gbox@0.0.3(ws@8.18.2)':
+  '@gru.ai/gbox@0.0.4(ws@8.18.2)':
     dependencies:
       '@types/tar': 6.1.13
       isomorphic-ws: 5.0.0(ws@8.18.2)

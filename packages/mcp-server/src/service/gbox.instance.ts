@@ -15,7 +15,7 @@ import {
     FileManager,
     GBoxFile,
     type ImagePullStatus,
-} from "../../../sdk/typescript/src/index";
+} from "@gru.ai/gbox";
 
 const GBOX_URL = process.env.GBOX_URL || 'http://localhost:28080';
 
