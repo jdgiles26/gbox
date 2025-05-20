@@ -5,7 +5,8 @@ This module provides direct mappings to the Box-related API endpoints in the GBo
 All methods return the raw server response data without any transformation.
 """
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, BinaryIO
+import json
 
 from ..config import GBoxConfig
 from .client import Client
@@ -269,9 +270,58 @@ class BoxApi:
         response = self.client.post(f"/api/v1/boxes/{box_id}/run", data=data)
         return response
 
-    # FIXME: This is not implemented yet
-    def exec() -> Any:
-        return
+    def exec(
+        self, 
+        box_id: str, 
+        command: List[str], 
+        tty: bool = False, 
+        stdin: Optional[Union[str, BinaryIO]] = None,
+        working_dir: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Execute a command in a Box with interactive streaming support.
+        Maps to POST /api/v1/boxes/{id}/exec endpoint with WebSocket upgrade.
+
+        Args:
+            box_id: ID of the Box
+            command: Command to run (first item is the command, rest are arguments)
+            tty: Whether to allocate a pseudo-TTY
+            stdin: Optional input data (string or file-like object)
+            working_dir: Optional working directory inside the container
+
+        Returns:
+            A dictionary with streams for stdout and stderr, and a future for the exit code:
+            {
+                "stdout": stream_object,
+                "stderr": stream_object,
+                "exit_code": future_object
+            }
+
+        Notes:
+            This method returns streams that can be read to get command output.
+            When using TTY mode, stdout and stderr are combined into a single stream.
+        """
+        # Construct request body according to API requirements
+        request_data = {
+            "cmd": command[:1],
+            "args": command[1:] if len(command) > 1 else [],
+            "stdin": stdin is not None,
+            "stdout": True,
+            "stderr": True,
+            "tty": tty
+        }
+        
+        if working_dir:
+            request_data["workingDir"] = working_dir
+        
+        # Use client's websocket_upgrade method
+        endpoint = f"/api/v1/boxes/{box_id}/exec"
+        return self.client.websocket_upgrade(
+            endpoint=endpoint,
+            data=request_data,
+            tty=tty,
+            stdin=stdin
+        )
 
     def reclaim(self, box_id: Optional[str] = None, force: bool = False) -> Dict[str, Any]:
         """
