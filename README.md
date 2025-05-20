@@ -1,6 +1,6 @@
 # gbox
 
-**gbox** is a self-hostable sandbox for Agents to execute commands, surf web and use desktop/mobile. See "Features" section for details.
+**gbox** is a self-hostable sandbox for AI Agents to execute commands, surf web and use desktop/mobile. See "Features" section for details.
 
 This project is based on the technology behind [gru.ai](https://gru.ai). It has been tested over 100000 Agent jobs.
 
@@ -10,21 +10,21 @@ As MCP is getting more and more popular, we also implemented a MCP server to mak
 1. Terminal
    - Execute any linux command
    - Execute python scripts directly
-   - Share session across invokes [under-development]
+   - Share session across invokes <em>[under-development]</em>
 2. File
    - Mount host machine folders into sandbox
    - Access sandbox files through http links
    - Read file content in multi-modal
    - Write/re-write files
-   - Edit files [under-development]
-   - Search files [under-development]
+   - Edit files <em>[under-development]</em>
+   - Search files <em>[under-development]</em>
 3. Browser
    - Open any url, return content in multi-modal
-   - Download from any url [under-development]
+   - Download from any url <em>[under-development]</em>
    - Operate browser by instructions
-   - Human take over [under-development]
+   - Human take over <em>[under-development]</em>
 4. HTTP Server
-   - Start http service on any folder on demand [under-development]
+   - Start http service on any folder on demand <em>[under-development]</em>
 5. SDKs
    - Python SDK: Install using `pip install pygbox`. See [PyPI](https://pypi.org/project/pygbox/) for details.
    - Typescript SDK
