@@ -1,10 +1,8 @@
 # gbox
 
-**gbox** is an open source project that provides a self-hostable sandbox for Agents to execute commands, read/write files, browse the web, operate iOS/Android. The sandbox can be used as a computer/phone/pad for agent. See "Features" section for details.
+**gbox** is a self-hostable sandbox for Agents to execute commands, surf web and use desktop/mobile. See "Features" section for details.
 
 This project is based on the technology behind [gru.ai](https://gru.ai). It has been tested over 100000 Agent jobs.
-
-For advanced scenarios, we also kept the ability to run sandboxes in k8s cluster locally or remotely.
 
 As MCP is getting more and more popular, we also implemented a MCP server to make it easy to be directly integrated into MCP client such as Claude Desktop/Cursor.
 
@@ -23,7 +21,7 @@ As MCP is getting more and more popular, we also implemented a MCP server to mak
 3. Browser
    - Open any url, return content in multi-modal
    - Download from any url [under-development]
-   - Operate browser by instructions [under-development]
+   - Operate browser by instructions
    - Human take over [under-development]
 4. HTTP Server
    - Start http service on any folder on demand [under-development]
