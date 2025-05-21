@@ -27,7 +27,7 @@ The SDK requires the following core dependencies:
 Initialize the client, pointing it to your self-hosted GBox server:
 
 ```python
-from pygbox import GBoxClient
+from gbox import GBoxClient
 
 # Initialize the client (defaults to http://localhost:28080)
 # Use base_url to specify a different server address
@@ -87,6 +87,19 @@ exit_code_ls, stdout_ls, stderr_ls = box.run(["ls", "-l"])
 box.run(["touch", "app.py"])
 ```
 
+Execute command with interactive streaming support.
+```python
+# Execute command with streaming I/O
+process = box.exec(
+    command=["cat", "/etc/hosts"],
+    stdin=None,
+    tty=False,
+    working_dir="/tmp"
+)
+# process is a dict with keys: stdout, stderr, exit_code
+```
+
+
 Copy file between box and local directory.
 ```python
 local_copy_source = "demo_copy_local_to_box.txt"
@@ -99,7 +112,6 @@ local_copy_target = "./downloaded_from_box.txt"
 
 box.copy(source=box_copy_source, target=local_copy_target)
 ```
-
 ### Files (Shared Volume)
 Interact with files stored in the GBox shared volume using `gbox.files`.
 ```python
@@ -150,3 +162,4 @@ reclaim_result = gbox.files.reclaim()
 
 ## License
 This SDK is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
+
