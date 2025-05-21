@@ -5,7 +5,7 @@ import io
 import logging  # <-- Add logging import
 import os  # <-- Add os import
 import tarfile  # <-- Add tarfile import
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union, BinaryIO
 
 # Add Pydantic imports
 from pydantic import BaseModel, Field, field_validator
@@ -528,6 +528,56 @@ class Box:
         else:
             # This case should not be reachable if prefixes are used correctly
             raise ValueError("Ambiguous copy direction. Use 'box:' prefix for Box paths.")
+
+    def exec(
+        self, 
+        command: List[str], 
+        tty: bool = False, 
+        stdin: Optional[Union[str, BinaryIO]] = None,
+        working_dir: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Execute a command in this Box with interactive streaming support.
+        
+        Args:
+            command: Command to run (first item is the command, rest are arguments)
+            tty: Whether to allocate a pseudo-TTY
+            stdin: Optional input data (string or file-like object)
+            working_dir: Optional working directory inside the container
+            
+        Returns:
+            A dictionary with streams for stdout and stderr, and a future for the exit code:
+            {
+                "stdout": stream_object,
+                "stderr": stream_object,
+                "exit_code": future_object
+            }
+            
+        Notes:
+            This method returns streams that can be read to get command output.
+            When using TTY mode, stdout and stderr are combined into a single stream.
+            
+        Example:
+            ```python
+            # Run a command and get streams
+            process = box.exec(["ls", "-la"])
+            
+            # Read stdout
+            stdout_data = process["stdout"].read()
+            print(stdout_data.decode())
+            
+            # Get exit code (blocks until command completes)
+            exit_code = process["exit_code"].result()
+            print(f"Command exited with code: {exit_code}")
+            ```
+        """
+        return self._client.box_api.exec(
+            box_id=self.id,
+            command=command,
+            tty=tty,
+            stdin=stdin,
+            working_dir=working_dir
+        )
 
     def __eq__(self, other):
         if not isinstance(other, Box):
