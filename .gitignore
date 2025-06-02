@@ -18,3 +18,5 @@ Thumbs.db
 
 .coverage
 .gbox
+
+node_modules

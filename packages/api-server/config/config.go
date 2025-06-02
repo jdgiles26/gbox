@@ -23,6 +23,7 @@ var (
 // Config represents the application configuration
 type Config struct {
 	Server  ServerConfig
+	Cua     CuaServerConfig `yaml:"cua-server"`
 	File    FileConfig
 	Cluster ClusterConfig
 	Browser BrowserConfig
@@ -31,6 +32,11 @@ type Config struct {
 // ServerConfig represents server configuration
 type ServerConfig struct {
 	Port int
+}
+
+type CuaServerConfig struct {
+	Host string `yaml:"host"`
+	Port int    `yaml:"port"`
 }
 
 // FileConfig represents file service configuration
@@ -75,6 +81,8 @@ func init() {
 	v.BindEnv("cluster.reclaimStopThreshold", "RECLAIM_STOP_THRESHOLD")
 	v.BindEnv("cluster.reclaimDeleteThreshold", "RECLAIM_DELETE_THRESHOLD")
 	v.BindEnv("server.port", "PORT")
+	v.BindEnv("cua-server.host", "CUA_HOST")
+	v.BindEnv("cua-server.port", "CUA_PORT")
 	v.BindEnv("cluster.docker.host", "DOCKER_HOST")
 	v.BindEnv("cluster.k8s.cfg", "KUBECONFIG")
 	v.BindEnv("file.home", "GBOX_HOME")
@@ -252,6 +260,10 @@ func New() (*Config, error) {
 	cfg := &Config{
 		Server: ServerConfig{
 			Port: 28080,
+		},
+		Cua: CuaServerConfig{
+			Host: "localhost",
+			Port: 28081,
 		},
 		File: FileConfig{
 			Home:      filepath.Join(os.Getenv("HOME"), ".gbox"),
