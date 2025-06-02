@@ -29,6 +29,7 @@ func NewBoxInspectCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runInspect(args[0], opts)
 		},
+		ValidArgsFunction: completeBoxIDs,
 	}
 
 	flags := cmd.Flags()
@@ -41,15 +42,21 @@ func NewBoxInspectCommand() *cobra.Command {
 	return cmd
 }
 
-func runInspect(boxID string, opts *BoxInspectOptions) error {
+func runInspect(boxIDPrefix string, opts *BoxInspectOptions) error {
+	resolvedBoxID, _, err := ResolveBoxIDPrefix(boxIDPrefix) // Use the new helper
+	if err != nil {
+		return fmt.Errorf("failed to resolve box ID: %w", err) // Return error if resolution fails
+	}
+
 	apiBase := config.GetAPIURL()
-	apiURL := fmt.Sprintf("%s/api/v1/boxes/%s", strings.TrimSuffix(apiBase, "/"), boxID)
+	// Use resolvedBoxID for the API call
+	apiURL := fmt.Sprintf("%s/api/v1/boxes/%s", strings.TrimSuffix(apiBase, "/"), resolvedBoxID)
 
 	if os.Getenv("DEBUG") == "true" {
 		fmt.Fprintf(os.Stderr, "Request URL: %s\n", apiURL)
 	}
 
-	resp, err := http.Get(apiURL)
+	resp, err := http.Get(apiURL) // GET request for inspect
 	if err != nil {
 		return fmt.Errorf("API call failed: %v", err)
 	}
@@ -65,7 +72,8 @@ func runInspect(boxID string, opts *BoxInspectOptions) error {
 		fmt.Fprintf(os.Stderr, "Response content: %s\n", string(body))
 	}
 
-	return handleInspectResponse(resp.StatusCode, body, boxID, opts.OutputFormat)
+	// Pass resolvedBoxID to the handler
+	return handleInspectResponse(resp.StatusCode, body, resolvedBoxID, opts.OutputFormat)
 }
 
 func handleInspectResponse(statusCode int, body []byte, boxID, outputFormat string) error {

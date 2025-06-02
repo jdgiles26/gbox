@@ -108,6 +108,14 @@ options:
 			// Run the command
 			return runExec(opts)
 		},
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			// Only complete the first argument (box-id)
+			if len(args) == 0 {
+				return completeBoxIDs(cmd, args, toComplete)
+			}
+			// No completion for subsequent arguments before -- or anything after --
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		},
 	}
 
 	// Add flags
@@ -119,47 +127,53 @@ options:
 
 // runExec implements the exec command functionality
 func runExec(opts *BoxExecOptions) error {
+	// Resolve box ID prefix from opts.BoxID
+	resolvedBoxID, _, err := ResolveBoxIDPrefix(opts.BoxID)
+	if err != nil {
+		return fmt.Errorf("failed to resolve box ID: %w", err)
+	}
+	// Update opts.BoxID to the fully resolved ID for subsequent use if needed,
+	// though for this function, we will primarily use resolvedBoxID directly.
+	// opts.BoxID = resolvedBoxID // Optional: update opts if it's used elsewhere by reference
+
 	debug := os.Getenv("DEBUG") == "true"
 	apiBase := config.GetAPIURL()
 	apiURL := fmt.Sprintf("%s/api/v1", strings.TrimSuffix(apiBase, "/"))
 
-	// Debug log
 	debugLog := func(msg string) {
 		if debug {
 			fmt.Fprintf(os.Stderr, "DEBUG: %s\n", msg)
 		}
 	}
 
-	// Check if stdin is available and interactive mode is enabled
-	stdinAvailable := opts.Interactive // Enable stdin if -i flag is set
+	stdinAvailable := opts.Interactive
 	if !stdinAvailable && !term.IsTerminal(int(os.Stdin.Fd())) {
-		stdinAvailable = true // Also enable stdin if there's pipe input
+		stdinAvailable = true
 	}
 
-	// Get terminal size if in TTY mode
 	var termSize *TerminalSize
-	var err error
+	// var err error // err is already declared by ResolveBoxIDPrefix, reuse or shadow
 	if opts.Tty {
-		termSize, err = GetTerminalSize()
+		termSize, err = GetTerminalSize() // This might shadow the err from ResolveBoxIDPrefix if not careful
 		if err != nil {
 			debugLog(fmt.Sprintf("Failed to get terminal size: %v", err))
-		} else {
+			// Decide if this is a fatal error. Original code just logs it.
+		} else if termSize != nil { // Added nil check for termSize
 			debugLog(fmt.Sprintf("Terminal size: height=%d, width=%d", termSize.Height, termSize.Width))
 		}
 	}
 
-	// Prepare request body
 	request := BoxExecRequest{
 		Cmd:    []string{opts.Command[0]},
 		Args:   opts.Command[1:],
-		Stdin:  stdinAvailable, // Use the corrected stdinAvailable logic
+		Stdin:  stdinAvailable,
 		Stdout: true,
 		Stderr: true,
 		Tty:    opts.Tty,
 	}
 
 	if opts.Tty {
-		request.Stdin = true // Ensure stdin is true if TTY is requested
+		request.Stdin = true
 	}
 
 	if termSize != nil {
@@ -169,7 +183,6 @@ func runExec(opts *BoxExecOptions) error {
 		}
 	}
 
-	// Encode request to JSON
 	requestBody, err := json.Marshal(request)
 	if err != nil {
 		return fmt.Errorf("failed to encode request: %v", err)
@@ -177,24 +190,20 @@ func runExec(opts *BoxExecOptions) error {
 
 	debugLog(fmt.Sprintf("Request body: %s", string(requestBody)))
 
-	// Create HTTP request
-	requestURL := fmt.Sprintf("%s/boxes/%s/exec", apiURL, opts.BoxID)
+	// Use resolvedBoxID for the API call
+	requestURL := fmt.Sprintf("%s/boxes/%s/exec", apiURL, resolvedBoxID)
 	req, err := http.NewRequest("POST", requestURL, bytes.NewBuffer(requestBody))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %v", err)
 	}
 
-	// Add headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Upgrade", "tcp")
 	req.Header.Set("Connection", "Upgrade")
 
-	// Set appropriate Accept header based on TTY mode
 	if opts.Tty {
-		// In TTY mode, use raw stream
 		req.Header.Set("Accept", "application/vnd.gbox.raw-stream")
 	} else {
-		// In non-TTY mode, use multiplexed stream
 		req.Header.Set("Accept", "application/vnd.gbox.multiplexed-stream")
 	}
 
@@ -203,7 +212,6 @@ func runExec(opts *BoxExecOptions) error {
 		debugLog(fmt.Sprintf("Header %s: %s", k, v))
 	}
 
-	// Perform HTTP request
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -216,13 +224,11 @@ func runExec(opts *BoxExecOptions) error {
 		debugLog(fmt.Sprintf("Response header %s: %s", k, v))
 	}
 
-	// Check response status
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusSwitchingProtocols {
 		var errMsg string
 		body, _ := io.ReadAll(resp.Body)
 		debugLog(fmt.Sprintf("Response body: %s", string(body)))
 
-		// Try to parse error message from JSON
 		var errorData map[string]interface{}
 		if err := json.Unmarshal(body, &errorData); err == nil {
 			if message, ok := errorData["message"].(string); ok {
@@ -230,27 +236,23 @@ func runExec(opts *BoxExecOptions) error {
 			}
 		}
 
-		// If errMsg is still empty after trying JSON, use the raw body
 		if errMsg == "" {
 			errMsg = string(body)
 		}
 
-		// Provide a specific hint for 409 Conflict (BoxNotRunning)
 		if resp.StatusCode == http.StatusConflict {
-			return fmt.Errorf("%s (status %d). Maybe run 'gbox box start %s'?", errMsg, resp.StatusCode, opts.BoxID)
+			// Use resolvedBoxID in the error message
+			return fmt.Errorf("%s (status %d). Maybe run 'gbox box start %s'?", errMsg, resp.StatusCode, resolvedBoxID)
 		} else {
-			// General error message for other statuses
 			return fmt.Errorf("%s (status %d)", errMsg, resp.StatusCode)
 		}
 	}
 
-	// Get hijacked connection
 	hijacker, ok := resp.Body.(io.ReadWriteCloser)
 	if !ok {
 		return fmt.Errorf("response does not support hijacking")
 	}
 
-	// Handle communication based on TTY mode
 	if opts.Tty {
 		return handleRawStream(hijacker)
 	} else {

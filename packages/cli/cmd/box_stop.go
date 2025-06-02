@@ -29,6 +29,7 @@ func NewBoxStopCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runStop(args[0], opts)
 		},
+		ValidArgsFunction: completeBoxIDs,
 	}
 
 	flags := cmd.Flags()
@@ -41,9 +42,15 @@ func NewBoxStopCommand() *cobra.Command {
 	return cmd
 }
 
-func runStop(boxID string, opts *BoxStopOptions) error {
+func runStop(boxIDPrefix string, opts *BoxStopOptions) error {
+	resolvedBoxID, _, err := ResolveBoxIDPrefix(boxIDPrefix) // Use the new helper
+	if err != nil {
+		return fmt.Errorf("failed to resolve box ID: %w", err) // Return error if resolution fails
+	}
+
 	apiBase := config.GetAPIURL()
-	apiURL := fmt.Sprintf("%s/api/v1/boxes/%s/stop", strings.TrimSuffix(apiBase, "/"), boxID)
+	// Use resolvedBoxID for the API call
+	apiURL := fmt.Sprintf("%s/api/v1/boxes/%s/stop", strings.TrimSuffix(apiBase, "/"), resolvedBoxID)
 
 	if os.Getenv("DEBUG") == "true" {
 		fmt.Fprintf(os.Stderr, "Request URL: %s\n", apiURL)
@@ -72,7 +79,8 @@ func runStop(boxID string, opts *BoxStopOptions) error {
 		fmt.Fprintf(os.Stderr, "Response content: %s\n", string(body))
 	}
 
-	return handleStopResponse(resp.StatusCode, body, boxID, opts.OutputFormat)
+	// Pass resolvedBoxID to the handler
+	return handleStopResponse(resp.StatusCode, body, resolvedBoxID, opts.OutputFormat)
 }
 
 // Define a local struct to unmarshal the response
