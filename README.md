@@ -238,6 +238,9 @@ ADB (Android Debug Bridge) is required for gbox to communicate with your Android
    export OPENAI_API_KEY=YOUR_KEY
    gbox cua android "Open Uber and book a ride to The Chinese University of Hong Kong now."
    ```
+   
+   The video demonstration for this task can be found in the first use case below under "Use Cases" section.
+
 
 ### Use Cases
 #### 1. Call an Uber
