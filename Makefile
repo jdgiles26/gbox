@@ -15,6 +15,7 @@ endef
 
 # Image tags
 API_SERVER_TAG := $(call get_git_hash,packages/api-server)
+CUA_SERVER_TAG := $(call get_git_hash,packages/cua-server)
 MCP_SERVER_TAG := $(call get_git_hash,packages/mcp-server)
 PY_IMG_TAG := $(call get_git_hash,images/python)
 PW_IMG_TAG := $(call get_git_hash,images/playwright)
@@ -85,6 +86,7 @@ dist-%: ## Create package for specific platform and architecture (e.g., dist-dar
 	cp .env $$PLATFORM_DIR/ 2>/dev/null || true; \
 	cp LICENSE README.md $$PLATFORM_DIR/; \
 	$(call write_env,$$PLATFORM_DIR/manifests/docker,API_SERVER_IMG_TAG,$(API_SERVER_TAG)); \
+	$(call append_env,$$PLATFORM_DIR/manifests/docker,CUA_SERVER_IMG_TAG,$(CUA_SERVER_TAG)); \
 	$(call append_env,$$PLATFORM_DIR/manifests/docker,MCP_SERVER_IMG_TAG,$(MCP_SERVER_TAG)); \
 	$(call append_env,$$PLATFORM_DIR/manifests/docker,PREFIX,""); \
 	$(call append_env,$$PLATFORM_DIR/manifests/docker,PY_IMG_TAG,$(PY_IMG_TAG)); \
