@@ -33,6 +33,7 @@ func NewBoxStartCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runStart(args[0], opts)
 		},
+		ValidArgsFunction: completeBoxIDs,
 	}
 
 	flags := cmd.Flags()
@@ -45,9 +46,15 @@ func NewBoxStartCommand() *cobra.Command {
 	return cmd
 }
 
-func runStart(boxID string, opts *BoxStartOptions) error {
+func runStart(boxIDPrefix string, opts *BoxStartOptions) error {
+	resolvedBoxID, _, err := ResolveBoxIDPrefix(boxIDPrefix) // Use the new helper
+	if err != nil {
+		return fmt.Errorf("failed to resolve box ID: %w", err) // Return error if resolution fails
+	}
+
 	apiBase := config.GetAPIURL()
-	apiURL := fmt.Sprintf("%s/api/v1/boxes/%s/start", strings.TrimSuffix(apiBase, "/"), boxID)
+	// Use resolvedBoxID for the API call
+	apiURL := fmt.Sprintf("%s/api/v1/boxes/%s/start", strings.TrimSuffix(apiBase, "/"), resolvedBoxID)
 
 	if os.Getenv("DEBUG") == "true" {
 		fmt.Fprintf(os.Stderr, "Request URL: %s\n", apiURL)
@@ -76,7 +83,8 @@ func runStart(boxID string, opts *BoxStartOptions) error {
 		fmt.Fprintf(os.Stderr, "Response content: %s\n", string(body))
 	}
 
-	return handleStartResponse(resp.StatusCode, body, boxID, opts.OutputFormat)
+	// Pass resolvedBoxID to the handler
+	return handleStartResponse(resp.StatusCode, body, resolvedBoxID, opts.OutputFormat)
 }
 
 func handleStartResponse(statusCode int, body []byte, boxID, outputFormat string) error {

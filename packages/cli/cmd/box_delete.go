@@ -40,6 +40,7 @@ func NewBoxDeleteCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDelete(opts, args)
 		},
+		ValidArgsFunction: completeBoxIDs,
 	}
 
 	flags := cmd.Flags()
@@ -159,8 +160,13 @@ func deleteAllBoxes(opts *BoxDeleteOptions) error {
 	return nil
 }
 
-func deleteBox(boxID string, opts *BoxDeleteOptions) error {
-	if err := performBoxDeletion(boxID); err != nil {
+func deleteBox(boxIDPrefix string, opts *BoxDeleteOptions) error {
+	resolvedBoxID, _, err := ResolveBoxIDPrefix(boxIDPrefix)
+	if err != nil {
+		return fmt.Errorf("failed to resolve box ID: %w", err)
+	}
+
+	if err := performBoxDeletion(resolvedBoxID); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		return nil
 	}
@@ -168,7 +174,7 @@ func deleteBox(boxID string, opts *BoxDeleteOptions) error {
 	if opts.OutputFormat == "json" {
 		fmt.Println(`{"status":"success","message":"Box deleted successfully"}`)
 	} else {
-		fmt.Println("Box deleted successfully")
+		fmt.Printf("Box %s deleted successfully\n", resolvedBoxID)
 	}
 	return nil
 }
