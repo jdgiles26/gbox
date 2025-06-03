@@ -133,6 +133,13 @@ api-dev: ## Start api server
 api: ## Start api server with docker compose
 	@cd manifests/docker && docker compose up --build
 
+cua-dev:
+	@echo "Starting cua server..."
+	@cd packages/cua-server && pnpm i && pnpm dev
+
+cua:
+	@cd manifests/docker && docker compose up --build
+
 mcp-dev: ## Start mcp server
 	@echo "Starting mcp server..."
 	@cd packages/mcp-server && pnpm dev
