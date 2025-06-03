@@ -192,11 +192,58 @@ Download youtube video:
 ![Image](https://i.imghippo.com/files/TI9396Rjg.png)
 https://claude.ai/share/c2ab6bcb-7032-489f-87d5-cc38f72c2ca9
 
-## Computer-Using Agent on Android Use Cases
-### 1. Call an Uber
+## Computer-Using Agent on Android
+
+### 📋 Prerequisites
+
+1. An Android device connected via USB or ADB over TCP/IP
+2. ADB (Android Debug Bridge) installed and configured
+3. API key for OpenAI with access to the computer-use-preview model
+
+### 🔧 Setting up ADB
+
+ADB (Android Debug Bridge) is required for gbox to communicate with your Android device:
+
+1. **Install ADB**:
+   - **Windows**: Download [Android SDK Platform Tools](https://developer.android.com/studio/releases/platform-tools) and extract the ZIP file
+   - **macOS**: `brew install android-platform-tools`
+   - **Linux**: `sudo apt install adb` (Ubuntu/Debian) or `sudo pacman -S android-tools` (Arch)
+
+2. **Add ADB to your PATH**:
+   - **Windows**: Add the path to the extracted platform-tools folder to your system's PATH environment variable
+   - **macOS/Linux**: Add the following to your ~/.bashrc or ~/.zshrc:
+     ```bash
+     export PATH=$PATH:/path/to/platform-tools
+     ```
+
+3. **Verify ADB installation**:
+   ```bash
+   adb version
+   ```
+
+4. **Enable USB debugging on your Android device**:
+   - Go to **Settings → About phone**
+   - Tap **Build number** 7 times to enable Developer options
+   - Go to **Settings → System → Developer options** (location may vary by device)
+   - Enable **USB debugging**
+
+5. **Connect Android device via USB and confirm ADB connected**
+   ```bash
+   adb devices -l
+   List of devices attached
+   897X0691U       Pixel_3 device
+   ```
+6. **Set the OPENAI_API_KEY environment variable and enjoy gbox Android CUA**
+   ```bash
+   export OPENAI_API_KEY=YOUR_KEY
+   gbox cua android "Open Uber and book a ride to The Chinese University of Hong Kong now."
+   ```
+
+### Use Cases
+#### 1. Call an Uber
 <video src="https://github.com/user-attachments/assets/804c3bf4-8269-4d3b-88b0-52ad3b74aec2" width="720" height="1448"></video>
 
-### 1. Use DoorDash/Foodpanda to order food delivery.
+#### 1. Use DoorDash/Foodpanda to order food delivery.
 <img src="https://i.imghippo.com/files/hYdz1413YaE.jpg" width="40%" height="40%">
 
 ## Develop gbox
