@@ -2,6 +2,10 @@
 server:
   port: 28080
 
+cua-server:
+  host: "localhost"
+  port: 28081
+
 browser:
   host: "localhost"
 

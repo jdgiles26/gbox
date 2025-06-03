@@ -23,12 +23,15 @@ As MCP is getting more and more popular, we also implemented a MCP server to mak
    - Download from any url <em>[under-development]</em>
    - Operate browser by instructions
    - Human take over <em>[under-development]</em>
-4. HTTP Server
+4. Computer-Using Agent for Android
+   - Natural language task execution via ADB client
+   - Physical Android devices supported only
+5. HTTP Server
    - Start http service on any folder on demand <em>[under-development]</em>
-5. SDKs
+6. SDKs
    - Python SDK: Install using `pip install pygbox`. See [PyPI](https://pypi.org/project/pygbox/) for details.
    - Typescript SDK
-6. MCP
+7. MCP
    - Standard MCP support
    - Integrate Claude Desktop & Cursor
 
@@ -110,6 +113,9 @@ gbox box delete <box-id>                                                        
 gbox box exec <box-id> -- python -c "print('Hello')"                               # Execute command
 gbox box inspect <box-id>                                                          # Inspect container
 
+# To use the Computer-Using Agent for Android, an OPENAI_API_KEY is required.
+gbox cua android "Open Uber and order a ride to The Chinese University of Hong Kong."
+
 # MCP configuration
 gbox mcp export                          # Export MCP configuration
 gbox mcp export --merge-to claude        # Export and merge into Claude Desktop config
@@ -185,6 +191,66 @@ https://claude.ai/share/f8c4c617-9b32-4062-a8e2-2ab33ef46f42
 Download youtube video:
 ![Image](https://i.imghippo.com/files/TI9396Rjg.png)
 https://claude.ai/share/c2ab6bcb-7032-489f-87d5-cc38f72c2ca9
+
+## Computer-Using Agent on Android
+
+### 📋 Prerequisites
+
+1. An Android device connected via USB or ADB over TCP/IP
+2. ADB (Android Debug Bridge) installed and configured
+3. API key for OpenAI with access to the computer-use-preview model
+
+### 🔧 Setting up ADB
+
+ADB (Android Debug Bridge) is required for gbox to communicate with your Android device:
+
+1. **Install ADB**:
+   - **Windows**: Download [Android SDK Platform Tools](https://developer.android.com/studio/releases/platform-tools) and extract the ZIP file
+   - **macOS**: `brew install android-platform-tools`
+   - **Linux**: `sudo apt install adb` (Ubuntu/Debian) or `sudo pacman -S android-tools` (Arch)
+
+2. **Add ADB to your PATH**:
+   - **Windows**: Add the path to the extracted platform-tools folder to your system's PATH environment variable
+   - **macOS/Linux**: Add the following to your ~/.bashrc or ~/.zshrc:
+     ```bash
+     export PATH=$PATH:/path/to/platform-tools
+     ```
+
+3. **Verify ADB installation**:
+   ```bash
+   adb version
+   ```
+
+4. **Enable USB debugging on your Android device**:
+   - Go to **Settings → About phone**
+   - Tap **Build number** 7 times to enable Developer options
+   - Go to **Settings → System → Developer options** (location may vary by device)
+   - Enable **USB debugging**
+
+5. **Connect Android device via USB and confirm ADB connected**
+   ```bash
+   adb devices -l
+   List of devices attached
+   897X0691U       Pixel_3 device
+   ```
+6. **Set the OPENAI_API_KEY environment variable and enjoy gbox Android CUA**
+   ```bash
+   export OPENAI_API_KEY=YOUR_KEY
+   gbox cua android "Open Uber and book a ride to The Chinese University of Hong Kong now."
+   ```
+   
+   The video demonstration for this task can be found in the first use case below under "Use Cases" section.
+
+
+### Use Cases
+#### 1. Call an Uber
+
+**Prompt**: Open Uber and book a ride to The Chinese University of Hong Kong now.
+
+<video src="https://github.com/user-attachments/assets/804c3bf4-8269-4d3b-88b0-52ad3b74aec2" width="720" height="1448"></video>
+
+#### 1. Use DoorDash/Foodpanda to order food delivery.
+<img src="https://i.imghippo.com/files/hYdz1413YaE.jpg" width="40%" height="40%">
 
 ## Develop gbox
 

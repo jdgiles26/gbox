@@ -21,6 +21,7 @@ import (
 	browserService "github.com/babelcloud/gbox/packages/api-server/internal/browser/service"
 	"github.com/babelcloud/gbox/packages/api-server/internal/common"
 	"github.com/babelcloud/gbox/packages/api-server/internal/cron"
+	cuaApi "github.com/babelcloud/gbox/packages/api-server/internal/cua/api"
 	fileApi "github.com/babelcloud/gbox/packages/api-server/internal/file/api"
 	fileService "github.com/babelcloud/gbox/packages/api-server/internal/file/service"
 	miscApi "github.com/babelcloud/gbox/packages/api-server/internal/misc/api"
@@ -84,6 +85,7 @@ func main() {
 	fileHandler := fileApi.NewFileHandler(*fileSvc)
 	miscHandler := miscApi.NewMiscHandler(miscSvc)
 	browserHandler := browserApi.NewHandler(browserSvc)
+	cuaHandler := cuaApi.NewCuaHandler()
 
 	// Create REST API container
 	container := restful.NewContainer()
@@ -99,6 +101,7 @@ func main() {
 	fileApi.RegisterRoutes(ws, fileHandler)
 	miscApi.RegisterRoutes(ws, miscHandler)
 	browserApi.RegisterBrowserRoutes(ws, browserHandler)
+	cuaApi.RegisterCuaRoutes(ws, cuaHandler)
 
 	container.Add(ws)
 
