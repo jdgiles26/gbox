@@ -244,6 +244,9 @@ ADB (Android Debug Bridge) is required for gbox to communicate with your Android
 
 ### Use Cases
 #### 1. Call an Uber
+
+**Prompt**: Open Uber and book a ride to The Chinese University of Hong Kong now.
+
 <video src="https://github.com/user-attachments/assets/804c3bf4-8269-4d3b-88b0-52ad3b74aec2" width="720" height="1448"></video>
 
 #### 1. Use DoorDash/Foodpanda to order food delivery.
