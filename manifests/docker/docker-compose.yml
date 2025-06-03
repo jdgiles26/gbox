@@ -23,8 +23,21 @@ services:
       - VNC_IMG_TAG=${VNC_IMG_TAG:-latest}
       - TS_IMG_TAG=${TS_IMG_TAG:-latest}
       - SH_IMG_TAG=${SH_IMG_TAG:-latest}
+      - CUA_SERVER_HOST=${CUA_SERVER_HOST:-cua-server}
+      - CUA_SERVER_PORT=${CUA_SERVER_PORT:-28081}
     restart: unless-stopped
-    
+  
+  cua-server:
+    container_name: ${PREFIX}${PREFIX:+-}gbox-cua-server
+    build:
+      context: ../../packages/cua-server
+      dockerfile: ../../packages/cua-server/Dockerfile
+    image: babelcloud/gbox-cua-server:${CUA_SERVER_IMG_TAG:-latest}
+    environment:
+      - TZ=Asia/Shanghai
+      - ANDROID_ADB_SERVER_ADDRESS=${ANDROID_ADB_SERVER_ADDRESS:-host.docker.internal}
+    restart: unless-stopped
+
   mcp-server:
     container_name: ${PREFIX}${PREFIX:+-}gbox-mcp-server
     build:

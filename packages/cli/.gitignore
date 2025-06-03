@@ -3,3 +3,4 @@
 # ignore gbox binary
 gbox-darwin-*
 gbox-linux-*
+gbox
