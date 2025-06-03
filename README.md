@@ -23,12 +23,15 @@ As MCP is getting more and more popular, we also implemented a MCP server to mak
    - Download from any url <em>[under-development]</em>
    - Operate browser by instructions
    - Human take over <em>[under-development]</em>
-4. HTTP Server
+4. Computer-Using Agent for Android
+   - Natural language task execution via ADB client
+   - Physical Android devices supported only
+5. HTTP Server
    - Start http service on any folder on demand <em>[under-development]</em>
-5. SDKs
+6. SDKs
    - Python SDK: Install using `pip install pygbox`. See [PyPI](https://pypi.org/project/pygbox/) for details.
    - Typescript SDK
-6. MCP
+7. MCP
    - Standard MCP support
    - Integrate Claude Desktop & Cursor
 
@@ -110,6 +113,9 @@ gbox box delete <box-id>                                                        
 gbox box exec <box-id> -- python -c "print('Hello')"                               # Execute command
 gbox box inspect <box-id>                                                          # Inspect container
 
+# To use the Computer-Using Agent for Android, an OPENAI_API_KEY is required.
+gbox cua android "Open Uber and order a ride from Science Park to The Chinese University of Hong Kong."
+
 # MCP configuration
 gbox mcp export                          # Export MCP configuration
 gbox mcp export --merge-to claude        # Export and merge into Claude Desktop config
@@ -185,6 +191,13 @@ https://claude.ai/share/f8c4c617-9b32-4062-a8e2-2ab33ef46f42
 Download youtube video:
 ![Image](https://i.imghippo.com/files/TI9396Rjg.png)
 https://claude.ai/share/c2ab6bcb-7032-489f-87d5-cc38f72c2ca9
+
+## Computer-Using Agent on Android Use Cases
+### 1. Call an Uber
+<video src="https://github.com/user-attachments/assets/804c3bf4-8269-4d3b-88b0-52ad3b74aec2" width="720" height="1448"></video>
+
+### 1. Use DoorDash/Foodpanda to order food delivery.
+![Image](https://i.imghippo.com/files/hYdz1413YaE.jpg)
 
 ## Develop gbox
 
