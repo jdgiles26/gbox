@@ -335,21 +335,17 @@ async function handleModelAction(action: any, res?: express.Response): Promise<v
                     } else if (k.toLowerCase() === "space") {
                         await execAsync('adb shell input keyevent 62');
                     } else {
-                        const decodedKey = decodeUnicodeEscapes(k);
-                        const encodedKey = Buffer.from(k).toString('base64');
-                        await execAsync(`adb shell am broadcast -a ADB_INPUT_B64 --es msg '${encodedKey}'`);
+                        await execAsync(`adb shell input text '${k}'`);
                     }
                 }
                 break;
 
             case "type":
                 const { text } = action;
-                const decodedText = decodeUnicodeEscapes(text);
-                const typeMsg = `Type text: ${text} -> decoded: ${decodedText}`;
+                const typeMsg = `Type text: ${text}`;
                 console.log(typeMsg);
                 if (res) sendSSEMessage(res, typeMsg);
-                const encodedText = Buffer.from(text).toString('base64');
-                await execAsync(`adb shell am broadcast -a ADB_INPUT_B64 --es msg '${encodedText}'`);
+                await execAsync(`adb shell input text '${text}'`);
                 break;
 
             case "wait":
@@ -394,7 +390,7 @@ async function computerUseLoop(response: any, openai: OpenAI, res?: express.Resp
         if (res && (res.destroyed || res.socket?.destroyed)) {
             const disconnectMsg = "Client disconnected, stopping computer use loop";
             console.log(disconnectMsg);
-            await cleanupAndroidDevice(res);
+            // await cleanupAndroidDevice(res);
             break;
         }
 
@@ -486,17 +482,9 @@ app.post('/execute', async (req, res) => {
             return;
         }
 
-        if (!await initializeAndroidDevice(res)) {
-            sendSSEMessage(res, 'Failed to initialize Android device');
-            await cleanupAndroidDevice(res);
-            res.end();
-            return;
-        }
-
         const screenSize = await getDeviceScreenSize(res);
         if (!screenSize) {
             sendSSEMessage(res, 'Failed to get screen size');
-            await cleanupAndroidDevice(res);
             res.end();
             return;
         }
@@ -506,10 +494,11 @@ app.post('/execute', async (req, res) => {
         console.log(sizeMsg);
         sendSSEMessage(res, sizeMsg);
 
+        sendSSEMessage(res, 'Taking a screenshot');
+
         const screenshotBytes = await getScreenshot(res);
         if (!screenshotBytes) {
             sendSSEMessage(res, 'Failed to get screenshot');
-            await cleanupAndroidDevice(res);
             res.end();
             return;
         }
@@ -553,15 +542,11 @@ app.post('/execute', async (req, res) => {
         sendSSEMessage(res, 'Task execution completed');
         res.write(`data: ${JSON.stringify({ type: 'result', data: finalResponse.output })}\n\n`);
 
-        // Cleanup operations after task completion
-        await cleanupAndroidDevice(res);
         res.end();
     } catch (error) {
         console.error('Error:', error);
         sendSSEMessage(res, `Internal server error: ${error}`);
 
-        // Cleanup operations in case of error
-        await cleanupAndroidDevice(res);
         res.end();
     }
 });
