@@ -158,40 +158,6 @@ gbox box create \
 
 Note: The host path must exist before creating the container. The container path will be created automatically if it doesn't exist.
 
-## MCP Use Cases
-
-Your AI client such as Claude Desktop can use gbox MCP to deliver better results, such as
-
-### 1. Generating Diagrams
-
-Generate diagrams of Tesla stock prices:
-![Image](https://i.imghippo.com/files/njBB6977VQQ.png)
-https://claude.ai/share/34de8ca3-4e04-441b-9e79-5875fa9fc97a
-
-### 2. Generating PDFs
-
-Generate PDF of latest AI news:
-![Image](https://i.imghippo.com/files/oMF9723LA.png)
-https://claude.ai/share/84600933-dcf2-44be-a2fd-7f49540db57a
-
-### 3. Analyzing and Calculation
-
-Analyze and compare Nvidia/Tesla market cap:
-![Image](https://i.imghippo.com/files/FE2710WR.png)
-https://claude.ai/share/70c335b7-9fff-4ee7-8459-e6b7462d8994
-
-### 4. Processing Local Files
-
-Find images in download folder and compress into zip.
-![image](https://i.imghippo.com/files/wcKb4481gMk.jpeg)
-https://claude.ai/share/f8c4c617-9b32-4062-a8e2-2ab33ef46f42
-
-### 5. Execute Arbitrary Tasks
-
-Download youtube video:
-![Image](https://i.imghippo.com/files/TI9396Rjg.png)
-https://claude.ai/share/c2ab6bcb-7032-489f-87d5-cc38f72c2ca9
-
 ## Computer-Using Agent on Android
 
 ### 📋 Prerequisites
@@ -251,6 +217,40 @@ ADB (Android Debug Bridge) is required for gbox to communicate with your Android
 
 #### 1. Use DoorDash/Foodpanda to order food delivery.
 <img src="https://i.imghippo.com/files/hYdz1413YaE.jpg" width="40%" height="40%">
+
+## MCP Use Cases
+
+Your AI client such as Claude Desktop can use gbox MCP to deliver better results, such as
+
+### 1. Generating Diagrams
+
+Generate diagrams of Tesla stock prices:
+![Image](https://i.imghippo.com/files/njBB6977VQQ.png)
+https://claude.ai/share/34de8ca3-4e04-441b-9e79-5875fa9fc97a
+
+### 2. Generating PDFs
+
+Generate PDF of latest AI news:
+![Image](https://i.imghippo.com/files/oMF9723LA.png)
+https://claude.ai/share/84600933-dcf2-44be-a2fd-7f49540db57a
+
+### 3. Analyzing and Calculation
+
+Analyze and compare Nvidia/Tesla market cap:
+![Image](https://i.imghippo.com/files/FE2710WR.png)
+https://claude.ai/share/70c335b7-9fff-4ee7-8459-e6b7462d8994
+
+### 4. Processing Local Files
+
+Find images in download folder and compress into zip.
+![image](https://i.imghippo.com/files/wcKb4481gMk.jpeg)
+https://claude.ai/share/f8c4c617-9b32-4062-a8e2-2ab33ef46f42
+
+### 5. Execute Arbitrary Tasks
+
+Download youtube video:
+![Image](https://i.imghippo.com/files/TI9396Rjg.png)
+https://claude.ai/share/c2ab6bcb-7032-489f-87d5-cc38f72c2ca9
 
 ## Develop gbox
 
