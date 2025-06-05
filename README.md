@@ -215,7 +215,7 @@ ADB (Android Debug Bridge) is required for gbox to communicate with your Android
 
 <video src="https://github.com/user-attachments/assets/804c3bf4-8269-4d3b-88b0-52ad3b74aec2" width="720" height="1448"></video>
 
-#### 1. Use DoorDash/Foodpanda to order food delivery.
+#### 2. Use DoorDash/Foodpanda to order food delivery.
 <img src="https://i.imghippo.com/files/hYdz1413YaE.jpg" width="40%" height="40%">
 
 ## MCP Use Cases
