@@ -243,6 +243,14 @@ func (h *BoxHandler) CreateBox(req *restful.Request, resp *restful.Response) {
 	resp.WriteHeaderAndEntity(http.StatusCreated, box)
 }
 
+func (h *BoxHandler) CreateLinuxBox(req *restful.Request, resp *restful.Response) {
+	writeError(resp, http.StatusNotImplemented, "NotImplemented", "CreateLinuxBox endpoint is not implemented yet")
+}
+
+func (h *BoxHandler) CreateAndroidBox(req *restful.Request, resp *restful.Response) {
+	writeError(resp, http.StatusNotImplemented, "NotImplemented", "CreateAndroidBox endpoint is not implemented yet")
+}
+
 // DeleteBox deletes a box by ID
 func (h *BoxHandler) DeleteBox(req *restful.Request, resp *restful.Response) {
 	boxID := req.PathParameter("id")
@@ -652,6 +660,38 @@ func (h *BoxHandler) UpdateBoxImage(req *restful.Request, resp *restful.Response
 
 	// return result
 	resp.WriteEntity(result)
+}
+
+func (h *BoxHandler) BoxActionClick(req *restful.Request, resp *restful.Response) {
+	writeError(resp, http.StatusNotImplemented, "NotImplemented", "BoxActionClick endpoint is not implemented yet")
+}
+
+func (h *BoxHandler) BoxActionDrag(req *restful.Request, resp *restful.Response) {
+	writeError(resp, http.StatusNotImplemented, "NotImplemented", "BoxActionDrag endpoint is not implemented yet")
+}
+
+func (h *BoxHandler) BoxActionMove(req *restful.Request, resp *restful.Response) {
+	writeError(resp, http.StatusNotImplemented, "NotImplemented", "BoxActionMove endpoint is not implemented yet")
+}
+
+func (h *BoxHandler) BoxActionPress(req *restful.Request, resp *restful.Response) {
+	writeError(resp, http.StatusNotImplemented, "NotImplemented", "BoxActionPress endpoint is not implemented yet")
+}
+
+func (h *BoxHandler) BoxActionScreenshot(req *restful.Request, resp *restful.Response) {
+	writeError(resp, http.StatusNotImplemented, "NotImplemented", "BoxActionScreenshot endpoint is not implemented yet")
+}
+
+func (h *BoxHandler) BoxActionScroll(req *restful.Request, resp *restful.Response) {
+	writeError(resp, http.StatusNotImplemented, "NotImplemented", "BoxActionScroll endpoint is not implemented yet")
+}
+
+func (h *BoxHandler) BoxActionTouch(req *restful.Request, resp *restful.Response) {
+	writeError(resp, http.StatusNotImplemented, "NotImplemented", "BoxActionTouch endpoint is not implemented yet")
+}
+
+func (h *BoxHandler) BoxActionType(req *restful.Request, resp *restful.Response) {
+	writeError(resp, http.StatusNotImplemented, "NotImplemented", "BoxActionType endpoint is not implemented yet")
 }
 
 // writeError writes an error response using local apiError struct
