@@ -244,18 +244,46 @@ func (s *Service) Run(ctx context.Context, id string, req *model.BoxRunParams) (
 		req.StderrLineLimit = 100
 	}
 
+	var cmd []string
+	var stdin string
+
+	// Check if Code and Type are both present for run-code functionality
+	if req.Code != "" && req.Type != "" {
+		// Use run-code capability based on Type
+		switch req.Type {
+		case "python3", "python":
+			cmd = []string{"python3"}
+			stdin = req.Code
+		case "javascript", "node":
+			cmd = []string{"node"}
+			stdin = req.Code
+		case "bash", "shell":
+			cmd = []string{"/bin/bash"}
+			stdin = req.Code
+		case "sh":
+			cmd = []string{"/bin/sh"}
+			stdin = req.Code
+		default:
+			return nil, fmt.Errorf("unsupported code type: %s", req.Type)
+		}
+	} else {
+		// Use original cmd/argv functionality
+		cmd = append(req.Cmd, req.Argv...)
+		stdin = req.Stdin
+	}
+
 	execConfig := types.ExecConfig{
 		User:         "", // Use default user
 		Privileged:   false,
 		Tty:          false, // Run commands typically don't need TTY
-		AttachStdin:  req.Stdin != "",
+		AttachStdin:  stdin != "",
 		AttachStdout: true,
 		AttachStderr: true,
 		Detach:       false,
 		DetachKeys:   "",  // Use default detach keys
 		Env:          nil, // No additional environment variables
 		WorkingDir:   common.DefaultWorkDirPath,
-		Cmd:          append(req.Cmd, req.Args...),
+		Cmd:          cmd,
 	}
 
 	execResp, err := s.client.ContainerExecCreate(ctx, containerInfo.ID, execConfig)
@@ -289,9 +317,9 @@ func (s *Service) Run(ctx context.Context, id string, req *model.BoxRunParams) (
 	}()
 
 	// Write stdin if provided
-	if req.Stdin != "" {
+	if stdin != "" {
 		go func() {
-			_, err := io.WriteString(attachResp.Conn, req.Stdin)
+			_, err := io.WriteString(attachResp.Conn, stdin)
 			if err != nil {
 				s.logger.Error("Error writing stdin: %v", err)
 			}

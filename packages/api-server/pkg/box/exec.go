@@ -29,7 +29,7 @@ type BoxExecResult struct {
 // BoxRunParams represents a request to run a command in a box
 type BoxRunParams struct {
 	Cmd             []string `json:"cmd,omitempty"`
-	Args            []string `json:"args,omitempty"`
+	Argv            []string `json:"argv,omitempty"`
 	Stdin           string   `json:"stdin,omitempty"`
 	StdoutLineLimit int      `json:"stdoutLineLimit,omitempty"`
 	StderrLineLimit int      `json:"stderrLineLimit,omitempty"`

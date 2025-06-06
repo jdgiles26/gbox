@@ -244,11 +244,42 @@ func (h *BoxHandler) CreateBox(req *restful.Request, resp *restful.Response) {
 }
 
 func (h *BoxHandler) CreateLinuxBox(req *restful.Request, resp *restful.Response) {
-	writeError(resp, http.StatusNotImplemented, "NotImplemented", "CreateLinuxBox endpoint is not implemented yet")
+	// Read request body directly into the internal model type
+	var createParams model.LinuxBoxCreateParam
+	if err := req.ReadEntity(&createParams); err != nil {
+		writeError(resp, http.StatusBadRequest, "InvalidRequest", err.Error())
+		return
+	}
+
+	// check if the client wants a stream response
+	acceptHeader := req.HeaderParameter("Accept")
+	streamRequest := acceptHeader == "application/json-stream"
+
+	if streamRequest {
+		// Define the service call for CreateLinuxBox compatible with streamServiceOperation
+		createLinuxBoxServiceCall := func(ctx context.Context, params interface{}, progressWriter io.Writer) (interface{}, error) {
+			cp, ok := params.(*model.LinuxBoxCreateParam)
+			if !ok {
+				return nil, fmt.Errorf("internal error: invalid params type for CreateLinuxBox service call")
+			}
+			return h.service.CreateLinuxBox(ctx, cp, progressWriter)
+		}
+		h.streamServiceOperation(req, resp, &createParams, createLinuxBoxServiceCall, true)
+		return
+	}
+
+	// standard JSON response (non-streaming) - wait for operation to complete
+	box, err := h.service.CreateLinuxBox(req.Request.Context(), &createParams, nil)
+	if err != nil {
+		writeError(resp, http.StatusInternalServerError, "CreateLinuxBoxError", err.Error())
+		return
+	}
+
+	resp.WriteHeaderAndEntity(http.StatusCreated, box)
 }
 
 func (h *BoxHandler) CreateAndroidBox(req *restful.Request, resp *restful.Response) {
-	writeError(resp, http.StatusNotImplemented, "NotImplemented", "CreateAndroidBox endpoint is not implemented yet")
+	writeError(resp, http.StatusNotImplemented, "NotImplemented", "Android box creation is not supported yet, please use the cloud version")
 }
 
 // DeleteBox deletes a box by ID

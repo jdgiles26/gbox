@@ -25,6 +25,17 @@ const defaultStopTimeout = 10 * time.Second
 
 // Create implements Service.Create
 func (s *Service) Create(ctx context.Context, params *model.BoxCreateParams, progressWriter io.Writer) (*model.Box, error) {
+	// Handle new Linux and Android box creation parameters
+	if params.OfCreateAndroidBox != nil {
+		return nil, fmt.Errorf("Android box creation is not supported yet, please use the cloud version")
+	}
+
+	if params.OfCreateLinuxBox != nil {
+		// Create Alpine Linux box with specific parameters
+		return s.createLinuxBox(ctx, params.OfCreateLinuxBox, progressWriter)
+	}
+
+	// Original logic continues if both new parameters are nil
 	// Get image name - This now handles defaults, env var resolution, and adding :latest if needed.
 	img := GetImage(params.Image)
 
@@ -180,6 +191,113 @@ func (s *Service) Create(ctx context.Context, params *model.BoxCreateParams, pro
 	}
 
 	// Update access time on successful creation/readiness
+	s.accessTracker.Update(boxID)
+
+	return containerToBox(containerInfo), nil
+}
+
+// createLinuxBox creates an Alpine Linux box with specific parameters
+func (s *Service) createLinuxBox(ctx context.Context, params *model.LinuxAndroidBoxCreateParam, progressWriter io.Writer) (*model.Box, error) {
+	// Use Alpine Linux as the default image
+	img := "alpine:latest"
+
+	// Check if image exists
+	_, _, err := s.client.ImageInspectWithRaw(ctx, img)
+	if err != nil {
+		// Image not found, try to pull it
+		pullOptions := types.ImagePullOptions{}
+
+		// Handle image pulling
+		if progressWriter != nil {
+			// Send initial status
+			initialStatus := model.ProgressUpdate{
+				Status:  model.ProgressStatusPrepare,
+				Message: fmt.Sprintf("Preparing to pull image: %s", img),
+			}
+			encoder := json.NewEncoder(progressWriter)
+			encoder.Encode(initialStatus)
+		}
+
+		pullResult := s.pullImageInternal(ctx, img, pullOptions, progressWriter)
+		if !pullResult.success {
+			return nil, fmt.Errorf("failed to pull image: %s", pullResult.message)
+		}
+	}
+
+	// Generate box ID
+	boxID := id.GenerateBoxID()
+	containerName := containerName(boxID)
+
+	// Prepare labels using only the labels from the Linux box config
+	labels := make(map[string]string)
+	labels[labelName] = "gbox"
+	labels[labelID] = boxID
+	labels["gbox.type"] = "linux" // Set box type
+
+	// Handle expiresIn parameter - TODO: actually use it
+	if params.Config.ExpiresIn != "" {
+		labels["gbox.expires_in"] = params.Config.ExpiresIn
+	}
+
+	// Add labels from the Linux box config
+	if params.Config.Labels != nil {
+		for k, v := range params.Config.Labels {
+			labels[k] = v
+		}
+	}
+
+	// Create share directory for the box
+	shareDir := filepath.Join(config.GetInstance().File.Share, boxID)
+	if err := os.MkdirAll(shareDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create share directory: %w", err)
+	}
+
+	// Prepare mounts (only default mount)
+	var mounts []mount.Mount
+	mounts = append(mounts, mount.Mount{
+		Type:   mount.TypeBind,
+		Source: filepath.Join(config.GetInstance().File.HostShare, boxID),
+		Target: common.DefaultShareDirPath,
+	})
+
+	// Prepare environment variables from the Linux box config
+	var env []string
+	if params.Config.Envs != nil {
+		for k, v := range params.Config.Envs {
+			env = append(env, fmt.Sprintf("%s=%s", k, v))
+		}
+	}
+
+	// Create container
+	containerConfig := &container.Config{
+		Image:  img,
+		Env:    env,
+		Labels: labels,
+		// WorkingDir could be added here if needed in the future
+	}
+
+	hostConfig := &container.HostConfig{
+		Mounts:          mounts,
+		PublishAllPorts: true,
+	}
+
+	resp, err := s.client.ContainerCreate(ctx, containerConfig, hostConfig, nil, nil, containerName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create container: %w", err)
+	}
+
+	// Start container
+	if err := s.client.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+		return nil, fmt.Errorf("failed to start container: %w", err)
+	}
+
+	// Get container details
+	containerInfo, err := s.getContainerByID(ctx, boxID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get container details after start: %w", err)
+	}
+
+	// Update access time on successful creation
 	s.accessTracker.Update(boxID)
 
 	return containerToBox(containerInfo), nil
