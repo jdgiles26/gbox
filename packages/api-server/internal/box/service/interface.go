@@ -35,6 +35,11 @@ type BoxService interface {
 	HeadArchive(ctx context.Context, id string, params *model.BoxArchiveHeadParams) (*model.BoxArchiveHeadResult, error)
 	ExtractArchive(ctx context.Context, id string, params *model.BoxArchiveExtractParams) error
 
+	// Box filesystem operations
+	ListFiles(ctx context.Context, id string, params *model.BoxFileListParams) (*model.BoxFileListResult, error)
+	ReadFile(ctx context.Context, id string, params *model.BoxFileReadParams) (*model.BoxFileReadResult, error)
+	WriteFile(ctx context.Context, id string, params *model.BoxFileWriteParams) (*model.BoxFileWriteResult, error)
+
 	// Box image operations
 	UpdateBoxImage(ctx context.Context, params *model.ImageUpdateParams) (*model.ImageUpdateResponse, error)
 	UpdateBoxImageWithProgress(ctx context.Context, params *model.ImageUpdateParams, progressWriter io.Writer) (*model.ImageUpdateResponse, error)

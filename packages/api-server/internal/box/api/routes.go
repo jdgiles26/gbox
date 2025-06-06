@@ -144,6 +144,39 @@ func RegisterRoutes(ws *restful.WebService, boxHandler *BoxHandler) {
 		Returns(404, "Not Found", model.BoxError{}).
 		Returns(500, "Internal Server Error", model.BoxError{}))
 
+	// Box Filesystem Operations
+	ws.Route(ws.GET("/boxes/{id}/fs/list").To(boxHandler.ListFiles).
+		Doc("list files in a directory").
+		Param(ws.PathParameter("id", "identifier of the box").DataType("string")).
+		Param(ws.QueryParameter("path", "path to list files from").DataType("string").Required(false)).
+		Param(ws.QueryParameter("depth", "depth of directory listing").DataType("number").Required(false)).
+		Produces("application/json").
+		Returns(200, "OK", model.BoxFileListResult{}).
+		Returns(400, "Bad Request", model.BoxError{}).
+		Returns(404, "Not Found", model.BoxError{}).
+		Returns(500, "Internal Server Error", model.BoxError{}))
+
+	ws.Route(ws.GET("/boxes/{id}/fs/read").To(boxHandler.ReadFile).
+		Doc("read file content").
+		Param(ws.PathParameter("id", "identifier of the box").DataType("string")).
+		Param(ws.QueryParameter("path", "path to file to read").DataType("string").Required(true)).
+		Produces("application/json").
+		Returns(200, "OK", model.BoxFileReadResult{}).
+		Returns(400, "Bad Request", model.BoxError{}).
+		Returns(404, "Not Found", model.BoxError{}).
+		Returns(500, "Internal Server Error", model.BoxError{}))
+
+	ws.Route(ws.POST("/boxes/{id}/fs/write").To(boxHandler.WriteFile).
+		Doc("write file content").
+		Param(ws.PathParameter("id", "identifier of the box").DataType("string")).
+		Param(ws.QueryParameter("path", "path to file to write").DataType("string").Required(true)).
+		Reads(model.BoxFileWriteParams{}).
+		Produces("application/json").
+		Returns(200, "OK", model.BoxFileWriteResult{}).
+		Returns(400, "Bad Request", model.BoxError{}).
+		Returns(404, "Not Found", model.BoxError{}).
+		Returns(500, "Internal Server Error", model.BoxError{}))
+
 	// Image management operations
 	ws.Route(ws.POST("/boxes/images/update").To(boxHandler.UpdateBoxImage).
 		Doc("updates docker images, pulling latest and removing outdated versions").
@@ -218,5 +251,6 @@ func RegisterRoutes(ws *restful.WebService, boxHandler *BoxHandler) {
 		Produces("application/json").
 		Returns(200, "OK", model.BoxActionTypeResult{}).
 		Returns(500, "Internal Server Error", model.BoxError{}))
-		
+
+	//ws.
 }

@@ -279,7 +279,7 @@ func (h *BoxHandler) CreateLinuxBox(req *restful.Request, resp *restful.Response
 }
 
 func (h *BoxHandler) CreateAndroidBox(req *restful.Request, resp *restful.Response) {
-	writeError(resp, http.StatusNotImplemented, "NotImplemented", "Android box creation is not supported yet, please use the cloud version")
+	writeError(resp, http.StatusNotImplemented, "NotImplemented", "This feature is exclusively available in the cloud version. Learn more at https://gbox.cloud/.")
 }
 
 // DeleteBox deletes a box by ID
@@ -654,6 +654,106 @@ func (h *BoxHandler) ExtractArchive(req *restful.Request, resp *restful.Response
 	resp.WriteHeader(http.StatusOK)
 }
 
+// ListFiles lists files in a directory
+func (h *BoxHandler) ListFiles(req *restful.Request, resp *restful.Response) {
+	boxID := req.PathParameter("id")
+	path := req.QueryParameter("path")
+	depthStr := req.QueryParameter("depth")
+
+	// Parse depth parameter
+	var depth float64 = 1 // default depth
+	if depthStr != "" {
+		var err error
+		depth, err = strconv.ParseFloat(depthStr, 64)
+		if err != nil {
+			writeError(resp, http.StatusBadRequest, "InvalidDepth", "Invalid depth parameter")
+			return
+		}
+	}
+
+	// If path is empty, default to root
+	if path == "" {
+		path = "/"
+	}
+
+	listParams := &model.BoxFileListParams{
+		Path:  path,
+		Depth: depth,
+	}
+
+	result, err := h.service.ListFiles(req.Request.Context(), boxID, listParams)
+	if err != nil {
+		if err == service.ErrBoxNotFound {
+			writeError(resp, http.StatusNotFound, "BoxNotFound", err.Error())
+			return
+		}
+		writeError(resp, http.StatusInternalServerError, "ListFilesError", err.Error())
+		return
+	}
+
+	resp.WriteHeaderAndEntity(http.StatusOK, result)
+}
+
+// ReadFile reads file content
+func (h *BoxHandler) ReadFile(req *restful.Request, resp *restful.Response) {
+	boxID := req.PathParameter("id")
+	path := req.QueryParameter("path")
+
+	if path == "" {
+		writeError(resp, http.StatusBadRequest, "InvalidRequest", "Path parameter is required")
+		return
+	}
+
+	readParams := &model.BoxFileReadParams{
+		Path: path,
+	}
+
+	result, err := h.service.ReadFile(req.Request.Context(), boxID, readParams)
+	if err != nil {
+		if err == service.ErrBoxNotFound {
+			writeError(resp, http.StatusNotFound, "BoxNotFound", err.Error())
+			return
+		}
+		writeError(resp, http.StatusInternalServerError, "ReadFileError", err.Error())
+		return
+	}
+
+	resp.WriteHeaderAndEntity(http.StatusOK, result)
+}
+
+// WriteFile writes file content
+func (h *BoxHandler) WriteFile(req *restful.Request, resp *restful.Response) {
+	boxID := req.PathParameter("id")
+	path := req.QueryParameter("path")
+
+	if path == "" {
+		writeError(resp, http.StatusBadRequest, "InvalidRequest", "Path parameter is required")
+		return
+	}
+
+	// Read content from request body
+	var writeParams model.BoxFileWriteParams
+	if err := req.ReadEntity(&writeParams); err != nil {
+		writeError(resp, http.StatusBadRequest, "InvalidRequest", err.Error())
+		return
+	}
+
+	// Set path from query parameter
+	writeParams.Path = path
+
+	result, err := h.service.WriteFile(req.Request.Context(), boxID, &writeParams)
+	if err != nil {
+		if err == service.ErrBoxNotFound {
+			writeError(resp, http.StatusNotFound, "BoxNotFound", err.Error())
+			return
+		}
+		writeError(resp, http.StatusInternalServerError, "WriteFileError", err.Error())
+		return
+	}
+
+	resp.WriteHeaderAndEntity(http.StatusOK, result)
+}
+
 // UpdateBoxImage updates docker images used for boxes, pulling latest and removing outdated versions
 func (h *BoxHandler) UpdateBoxImage(req *restful.Request, resp *restful.Response) {
 	// parse query parameters
@@ -694,35 +794,35 @@ func (h *BoxHandler) UpdateBoxImage(req *restful.Request, resp *restful.Response
 }
 
 func (h *BoxHandler) BoxActionClick(req *restful.Request, resp *restful.Response) {
-	writeError(resp, http.StatusNotImplemented, "NotImplemented", "BoxActionClick endpoint is not implemented yet")
+	writeError(resp, http.StatusNotImplemented, "NotImplemented", "This feature is exclusively available in the cloud version. Learn more at https://gbox.cloud/.")
 }
 
 func (h *BoxHandler) BoxActionDrag(req *restful.Request, resp *restful.Response) {
-	writeError(resp, http.StatusNotImplemented, "NotImplemented", "BoxActionDrag endpoint is not implemented yet")
+	writeError(resp, http.StatusNotImplemented, "NotImplemented", "This feature is exclusively available in the cloud version. Learn more at https://gbox.cloud/.")
 }
 
 func (h *BoxHandler) BoxActionMove(req *restful.Request, resp *restful.Response) {
-	writeError(resp, http.StatusNotImplemented, "NotImplemented", "BoxActionMove endpoint is not implemented yet")
+	writeError(resp, http.StatusNotImplemented, "NotImplemented", "This feature is exclusively available in the cloud version. Learn more at https://gbox.cloud/.")
 }
 
 func (h *BoxHandler) BoxActionPress(req *restful.Request, resp *restful.Response) {
-	writeError(resp, http.StatusNotImplemented, "NotImplemented", "BoxActionPress endpoint is not implemented yet")
+	writeError(resp, http.StatusNotImplemented, "NotImplemented", "This feature is exclusively available in the cloud version. Learn more at https://gbox.cloud/.")
 }
 
 func (h *BoxHandler) BoxActionScreenshot(req *restful.Request, resp *restful.Response) {
-	writeError(resp, http.StatusNotImplemented, "NotImplemented", "BoxActionScreenshot endpoint is not implemented yet")
+	writeError(resp, http.StatusNotImplemented, "NotImplemented", "This feature is exclusively available in the cloud version. Learn more at https://gbox.cloud/.")
 }
 
 func (h *BoxHandler) BoxActionScroll(req *restful.Request, resp *restful.Response) {
-	writeError(resp, http.StatusNotImplemented, "NotImplemented", "BoxActionScroll endpoint is not implemented yet")
+	writeError(resp, http.StatusNotImplemented, "NotImplemented", "This feature is exclusively available in the cloud version. Learn more at https://gbox.cloud/.")
 }
 
 func (h *BoxHandler) BoxActionTouch(req *restful.Request, resp *restful.Response) {
-	writeError(resp, http.StatusNotImplemented, "NotImplemented", "BoxActionTouch endpoint is not implemented yet")
+	writeError(resp, http.StatusNotImplemented, "NotImplemented", "This feature is exclusively available in the cloud version. Learn more at https://gbox.cloud/.")
 }
 
 func (h *BoxHandler) BoxActionType(req *restful.Request, resp *restful.Response) {
-	writeError(resp, http.StatusNotImplemented, "NotImplemented", "BoxActionType endpoint is not implemented yet")
+	writeError(resp, http.StatusNotImplemented, "NotImplemented", "This feature is exclusively available in the cloud version. Learn more at https://gbox.cloud/.")
 }
 
 // writeError writes an error response using local apiError struct

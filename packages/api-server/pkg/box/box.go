@@ -39,3 +39,39 @@ type LinuxAndroidBoxConfigBrowser struct {
 type LinuxAndroidBoxConfigOs struct {
 	Version string `json:"version"`
 }
+
+type BoxFile struct {
+	LastModified time.Time `json:"lastModified"`
+	Name         string    `json:"name"`
+	Path         string    `json:"path"`
+	Size string `json:"size"`
+	Type string `json:"type"`
+}
+
+type BoxFileListParams struct {
+	// Path to the directory
+	Path string `json:"-"`
+	// Depth of the directory
+	Depth float64 `json:"-"`
+}
+
+type BoxFileListResult struct {
+	Data []BoxFile `json:"data"`
+}
+
+type BoxFileReadParams struct {
+	Path string `json:"-"`
+}
+
+type BoxFileReadResult struct {
+	Content string `json:"content"`
+}
+
+type BoxFileWriteParams struct {
+	Path string `json:"-"`
+	Content string `json:"-"`
+}
+
+type BoxFileWriteResult struct {
+	Message string `json:"message"`
+}

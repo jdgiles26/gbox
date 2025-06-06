@@ -140,6 +140,18 @@ func (m *mockBoxService) BoxActionType(ctx context.Context, id string, params *b
 	return nil, fmt.Errorf("mockBoxService.BoxActionType not implemented")
 }
 
+func (m *mockBoxService) ListFiles(ctx context.Context, id string, params *boxModel.BoxFileListParams) (*boxModel.BoxFileListResult, error) {
+	return nil, fmt.Errorf("mockBoxService.ListFiles not implemented")
+}
+
+func (m *mockBoxService) ReadFile(ctx context.Context, id string, params *boxModel.BoxFileReadParams) (*boxModel.BoxFileReadResult, error) {
+	return nil, fmt.Errorf("mockBoxService.ReadFile not implemented")
+}
+
+func (m *mockBoxService) WriteFile(ctx context.Context, id string, params *boxModel.BoxFileWriteParams) (*boxModel.BoxFileWriteResult, error) {
+	return nil, fmt.Errorf("mockBoxService.WriteFile not implemented")
+}
+
 // CheckImageExists checks if an image exists locally (Mock implementation)
 func (m *mockBoxService) CheckImageExists(ctx context.Context, params *boxModel.BoxCreateParams) (bool, string) {
 	// In test environment, assume image always exists

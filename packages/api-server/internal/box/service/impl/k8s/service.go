@@ -871,6 +871,21 @@ func (s *Service) BoxActionType(ctx context.Context, id string, params *model.Bo
 	return nil, nil
 }
 
+func (s *Service) ListFiles(ctx context.Context, id string, params *model.BoxFileListParams) (*model.BoxFileListResult, error) {
+	// unimplemented
+	return nil, nil
+}
+
+func (s *Service) ReadFile(ctx context.Context, id string, params *model.BoxFileReadParams) (*model.BoxFileReadResult, error) {
+	// unimplemented
+	return nil, nil
+}
+
+func (s *Service) WriteFile(ctx context.Context, id string, params *model.BoxFileWriteParams) (*model.BoxFileWriteResult, error) {
+	// unimplemented
+	return nil, nil
+}
+
 func init() {
 	service.Register("k8s", func(tracker tracker.AccessTracker) (service.BoxService, error) {
 		return NewService(tracker)
