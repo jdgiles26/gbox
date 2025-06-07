@@ -25,16 +25,21 @@ const defaultStopTimeout = 10 * time.Second
 
 // Create implements Service.Create
 func (s *Service) Create(ctx context.Context, params *model.BoxCreateParams, progressWriter io.Writer) (*model.Box, error) {
-	// Handle new Linux and Android box creation parameters
-	if params.OfCreateAndroidBox != nil {
-		return nil, fmt.Errorf("Android box creation is not supported yet, please use the cloud version")
+	// Handle SDK format (inline parameters with Type field)
+	if params.LinuxAndroidBoxCreateParam != nil && params.Type != "" {
+		switch params.Type {
+		case "android":
+			return nil, fmt.Errorf("Android box creation is not supported yet, please use the cloud version")
+		case "linux":
+			s.logger.Info("Creating Linux box with SDK parameters: %+v", params.LinuxAndroidBoxCreateParam)
+			return s.createLinuxBox(ctx, params.LinuxAndroidBoxCreateParam, progressWriter)
+		default:
+			return nil, fmt.Errorf("unsupported box type: %s", params.Type)
+		}
 	}
 
-	if params.OfCreateLinuxBox != nil {
-		// Create Alpine Linux box with specific parameters
-		return s.createLinuxBox(ctx, params.OfCreateLinuxBox, progressWriter)
-	}
-
+	// Handle legacy format (individual parameters)
+	s.logger.Info("Creating box with legacy parameters: %+v", params)
 	// Original logic continues if both new parameters are nil
 	// Get image name - This now handles defaults, env var resolution, and adding :latest if needed.
 	img := GetImage(params.Image)
@@ -228,22 +233,23 @@ func (s *Service) createLinuxBox(ctx context.Context, params *model.LinuxAndroid
 	boxID := id.GenerateBoxID()
 	containerName := containerName(boxID)
 
-	// Prepare labels using only the labels from the Linux box config
-	labels := make(map[string]string)
-	labels[labelName] = "gbox"
-	labels[labelID] = boxID
-	labels["gbox.type"] = "linux" // Set box type
-
-	// Handle expiresIn parameter - TODO: actually use it
-	if params.Config.ExpiresIn != "" {
-		labels["gbox.expires_in"] = params.Config.ExpiresIn
+	// Create a BoxCreateParams struct to use PrepareLabels function
+	// This ensures consistent labeling with the Create method
+	tempParams := &model.BoxCreateParams{
+		Image: img,
+		Env:   params.Config.Envs,
+	}
+	if params.Config.Labels != nil {
+		tempParams.ExtraLabels = params.Config.Labels
 	}
 
-	// Add labels from the Linux box config
-	if params.Config.Labels != nil {
-		for k, v := range params.Config.Labels {
-			labels[k] = v
-		}
+	// Use the same PrepareLabels function as Create method
+	labels := PrepareLabels(boxID, tempParams)
+
+	// Add Linux-specific labels
+	labels["gbox.type"] = "linux"
+	if params.Config.ExpiresIn != "" {
+		labels["gbox.expires_in"] = params.Config.ExpiresIn
 	}
 
 	// Create share directory for the box
@@ -252,7 +258,7 @@ func (s *Service) createLinuxBox(ctx context.Context, params *model.LinuxAndroid
 		return nil, fmt.Errorf("failed to create share directory: %w", err)
 	}
 
-	// Prepare mounts (only default mount)
+	// Prepare mounts (same as Create method)
 	var mounts []mount.Mount
 	mounts = append(mounts, mount.Mount{
 		Type:   mount.TypeBind,
@@ -260,20 +266,12 @@ func (s *Service) createLinuxBox(ctx context.Context, params *model.LinuxAndroid
 		Target: common.DefaultShareDirPath,
 	})
 
-	// Prepare environment variables from the Linux box config
-	var env []string
-	if params.Config.Envs != nil {
-		for k, v := range params.Config.Envs {
-			env = append(env, fmt.Sprintf("%s=%s", k, v))
-		}
-	}
-
-	// Create container
+	// Create container with same logic as Create method
 	containerConfig := &container.Config{
 		Image:  img,
-		Env:    env,
+		Cmd:    GetCommand("", nil), // Use GetCommand for consistent behavior
+		Env:    MapToEnv(params.Config.Envs),
 		Labels: labels,
-		// WorkingDir could be added here if needed in the future
 	}
 
 	hostConfig := &container.HostConfig{
@@ -291,13 +289,13 @@ func (s *Service) createLinuxBox(ctx context.Context, params *model.LinuxAndroid
 		return nil, fmt.Errorf("failed to start container: %w", err)
 	}
 
-	// Get container details
+	// Get container details after start (same as Create method)
 	containerInfo, err := s.getContainerByID(ctx, boxID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get container details after start: %w", err)
 	}
 
-	// Update access time on successful creation
+	// Update access time on successful creation (same as Create method)
 	s.accessTracker.Update(boxID)
 
 	return containerToBox(containerInfo), nil

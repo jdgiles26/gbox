@@ -169,7 +169,6 @@ func RegisterRoutes(ws *restful.WebService, boxHandler *BoxHandler) {
 	ws.Route(ws.POST("/boxes/{id}/fs/write").To(boxHandler.WriteFile).
 		Doc("write file content").
 		Param(ws.PathParameter("id", "identifier of the box").DataType("string")).
-		Param(ws.QueryParameter("path", "path to file to write").DataType("string").Required(true)).
 		Reads(model.BoxFileWriteParams{}).
 		Produces("application/json").
 		Returns(200, "OK", model.BoxFileWriteResult{}).

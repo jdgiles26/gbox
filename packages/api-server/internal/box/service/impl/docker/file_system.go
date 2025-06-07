@@ -15,6 +15,55 @@ import (
 	model "github.com/babelcloud/gbox/packages/api-server/pkg/box"
 )
 
+// demuxDockerOutput demultiplexes Docker exec output and returns the clean content
+func demuxDockerOutput(raw []byte) string {
+	if len(raw) == 0 {
+		return ""
+	}
+
+	// Docker uses an 8-byte header for multiplexed streams:
+	// [0] stream type (1=stdout, 2=stderr)
+	// [1-3] reserved
+	// [4-7] size (big endian)
+	var result bytes.Buffer
+	offset := 0
+
+	for offset < len(raw) {
+		if offset+8 > len(raw) {
+			// Not enough bytes for header, treat rest as raw content
+			result.Write(raw[offset:])
+			break
+		}
+
+		// Read the size from bytes 4-7 (big endian)
+		size := int(raw[offset+4])<<24 | int(raw[offset+5])<<16 | int(raw[offset+6])<<8 | int(raw[offset+7])
+
+		if size == 0 {
+			// No payload, skip this frame
+			offset += 8
+			continue
+		}
+
+		if offset+8+size > len(raw) {
+			// Not enough bytes for payload, treat rest as raw content
+			result.Write(raw[offset:])
+			break
+		}
+
+		// Extract the payload
+		payload := raw[offset+8 : offset+8+size]
+		result.Write(payload)
+		offset += 8 + size
+	}
+
+	// If no proper demux was done, return original string
+	if result.Len() == 0 {
+		return string(raw)
+	}
+
+	return result.String()
+}
+
 // ListFiles lists files in a directory within a container
 func (s *Service) ListFiles(ctx context.Context, id string, params *model.BoxFileListParams) (*model.BoxFileListResult, error) {
 	// Get container info first to validate box exists
@@ -34,8 +83,8 @@ func (s *Service) ListFiles(ctx context.Context, id string, params *model.BoxFil
 		path = "/"
 	}
 
-	// Use ls command to list files
-	cmd := []string{"ls", "-la", "--time-style=iso", path}
+	// Use ls command to list files (BusyBox compatible)
+	cmd := []string{"ls", "-la", path}
 	if params.Depth > 1 {
 		// For depth > 1, use find command
 		maxDepth := int(params.Depth)
@@ -66,8 +115,11 @@ func (s *Service) ListFiles(ctx context.Context, id string, params *model.BoxFil
 		return nil, fmt.Errorf("failed to read exec output: %w", err)
 	}
 
+	// Demultiplex Docker output and clean up
+	cleanOutput := demuxDockerOutput(output.Bytes())
+
 	// Parse ls output to BoxFile structs
-	files, err := s.parseLsOutput(output.String(), path)
+	files, err := s.parseLsOutput(cleanOutput, path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse ls output: %w", err)
 	}
@@ -127,8 +179,11 @@ func (s *Service) ReadFile(ctx context.Context, id string, params *model.BoxFile
 		return nil, fmt.Errorf("failed to read file %s: command exited with code %d", params.Path, inspect.ExitCode)
 	}
 
+	// Demultiplex Docker output and clean up the content
+	cleanContent := demuxDockerOutput(content.Bytes())
+
 	return &model.BoxFileReadResult{
-		Content: content.String(),
+		Content: strings.TrimSpace(cleanContent),
 	}, nil
 }
 
@@ -229,21 +284,32 @@ func (s *Service) parseLsOutput(output, basePath string) ([]model.BoxFile, error
 		}
 
 		permissions := fields[0]
+
+		// Validate permissions field (should start with - or d or l)
+		if !strings.HasPrefix(permissions, "-") && !strings.HasPrefix(permissions, "d") && !strings.HasPrefix(permissions, "l") {
+			continue // Skip invalid lines
+		}
+
 		size := fields[4]
 
-		// Date and time can be in different formats, try to parse
+		// Date and time parsing for BusyBox ls output
 		var lastModified time.Time
 		if len(fields) >= 8 {
-			// Try different date formats
+			// BusyBox ls output format: "Jan 1 12:34" or "Jan 1 2023"
 			dateTimeStr := strings.Join(fields[5:8], " ")
 			formats := []string{
-				"2006-01-02 15:04",
-				"Jan 02 15:04",
-				"Jan 02 2006",
+				"Jan 2 15:04",  // Recent files: "Jan 1 12:34"
+				"Jan 2 2006",   // Old files: "Jan 1 2023"
+				"Jan 02 15:04", // Alternative format
+				"Jan 02 2006",  // Alternative format
 			}
 
 			for _, format := range formats {
 				if parsed, err := time.Parse(format, dateTimeStr); err == nil {
+					// For "Jan 2 15:04" format, assume current year
+					if parsed.Year() == 0 {
+						parsed = parsed.AddDate(time.Now().Year(), 0, 0)
+					}
 					lastModified = parsed
 					break
 				}
@@ -255,6 +321,11 @@ func (s *Service) parseLsOutput(output, basePath string) ([]model.BoxFile, error
 
 		// Skip . and .. entries
 		if filename == "." || filename == ".." {
+			continue
+		}
+
+		// Skip empty filenames
+		if filename == "" {
 			continue
 		}
 

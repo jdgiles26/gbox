@@ -724,12 +724,6 @@ func (h *BoxHandler) ReadFile(req *restful.Request, resp *restful.Response) {
 // WriteFile writes file content
 func (h *BoxHandler) WriteFile(req *restful.Request, resp *restful.Response) {
 	boxID := req.PathParameter("id")
-	path := req.QueryParameter("path")
-
-	if path == "" {
-		writeError(resp, http.StatusBadRequest, "InvalidRequest", "Path parameter is required")
-		return
-	}
 
 	// Read content from request body
 	var writeParams model.BoxFileWriteParams
@@ -738,8 +732,10 @@ func (h *BoxHandler) WriteFile(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
-	// Set path from query parameter
-	writeParams.Path = path
+	if writeParams.Path == "" {
+		writeError(resp, http.StatusBadRequest, "InvalidRequest", "Path parameter is required")
+		return
+	}
 
 	result, err := h.service.WriteFile(req.Request.Context(), boxID, &writeParams)
 	if err != nil {

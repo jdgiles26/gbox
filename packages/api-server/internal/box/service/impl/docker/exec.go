@@ -248,23 +248,20 @@ func (s *Service) Run(ctx context.Context, id string, req *model.BoxRunParams) (
 	var stdin string
 
 	// Check if Code and Type are both present for run-code functionality
-	if req.Code != "" && req.Type != "" {
+	if req.Code != "" && req.Language != "" {
 		// Use run-code capability based on Type
-		switch req.Type {
-		case "python3", "python":
+		switch req.Language {
+		case "python3":
 			cmd = []string{"python3"}
 			stdin = req.Code
-		case "javascript", "node":
-			cmd = []string{"node"}
+		case "typescript":
+			cmd = []string{"npx", "ts-node"}
 			stdin = req.Code
-		case "bash", "shell":
-			cmd = []string{"/bin/bash"}
-			stdin = req.Code
-		case "sh":
-			cmd = []string{"/bin/sh"}
-			stdin = req.Code
+		case "bash":
+			cmd = []string{"sh", "-c", req.Code}
+			stdin = ""
 		default:
-			return nil, fmt.Errorf("unsupported code type: %s", req.Type)
+			return nil, fmt.Errorf("unsupported code type: %s", req.Language)
 		}
 	} else {
 		// Use original cmd/argv functionality

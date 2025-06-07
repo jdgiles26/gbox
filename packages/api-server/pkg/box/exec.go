@@ -36,7 +36,7 @@ type BoxRunParams struct {
 
 	// this is only supported for cloud version
 	Code      string `json:"code,omitempty"`
-	Type      string `json:"type,omitempty"` // type of the code to run, e.g. "python3", "javascript", "shell"
+	Language  string `json:"language,omitempty"` // type of the code to run, e.g. "python3", "typescript", "bash"
 	Timeout   string `json:"timeout,omitempty"`
 	WorkingDir string `json:"workingDir,omitempty"`
 	Envs       map[string]string `json:"envs,omitempty"` // Environment variables for the command execution
