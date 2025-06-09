@@ -301,9 +301,8 @@ func (s *Service) createLinuxBox(ctx context.Context, params *model.LinuxAndroid
 	return containerToBox(containerInfo), nil
 }
 
-// not implemented
 func (s *Service) CreateLinuxBox(ctx context.Context, params *model.LinuxBoxCreateParam, progressWriter io.Writer) (*model.Box, error) {
-	return nil, fmt.Errorf("CreateLinuxBox not implemented")
+	return s.createLinuxBox(ctx, &params.CreateLinuxBox, progressWriter)
 }
 
 // not implemented
