@@ -22,7 +22,7 @@ export const handleListBoxes = withLogging(
         {
           type: "text" as const,
           // Stringify only the extracted attributes
-          text: JSON.stringify(boxAttributes, null, 2),
+          text: JSON.stringify(boxAttributes.map(box => box.labels), null, 2),
         },
       ],
     };

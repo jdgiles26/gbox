@@ -16,7 +16,7 @@ import {
     UnprocessableEntityError, 
 } from 'gbox-sdk'
 
-const GBOX_BASE_URL = process.env.GBOX_URL || 'http://localhost:28080';
+const GBOX_BASE_URL = process.env.GBOX_URL || 'http://localhost:28080/api/v1';
 
 export const gbox = new GboxSDK({
     baseURL: GBOX_BASE_URL,

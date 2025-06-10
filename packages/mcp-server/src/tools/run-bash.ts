@@ -89,7 +89,7 @@ export const handleRunBash = withLogging(
       content: [
         {
           type: "text" as const,
-          text: JSON.stringify(runResult, null, 2),
+          text: `stdout: ${runResult.stdout}\n stderr: ${runResult.stderr}`,
         },
       ],
     };

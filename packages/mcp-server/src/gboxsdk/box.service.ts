@@ -22,7 +22,7 @@ export class BoxService {
                 }
             } else {
                 const boxListResult = await gbox.list() as LinuxBoxOperator[];
-                boxes = boxListResult.filter(box => (box.config.labels as string[])?.includes(`sessionId=${options.sessionId}`));
+                boxes = boxListResult.filter(box => (box.config.labels as any)?.sessionId === options.sessionId);
             }
             return { boxes, count: boxes.length };
         } catch (error) {
@@ -33,7 +33,7 @@ export class BoxService {
     async getBox(id: string, options?: { signal?: AbortSignal; sessionId?: string }): Promise<LinuxBoxOperator> {
         try {
             const box = await gbox.get(id) as LinuxBoxOperator;
-            if (options?.sessionId && !(box.config.labels as string[])?.includes(`sessionId=${options.sessionId}`)) {
+            if (options?.sessionId && (box.config.labels as any)?.sessionId !== options.sessionId) {
                 throw new Error(`Box ${id} found but does not belong to session ${options.sessionId}`);
             }
             return box;
@@ -150,6 +150,7 @@ export class BoxService {
         const createOptions: CreateLinux = {
             type: 'linux',
             config: {
+                expiresIn: "1000s",
                 envs: { sessionId },
                 labels: { sessionId },
             },
