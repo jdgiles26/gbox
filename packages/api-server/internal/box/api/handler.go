@@ -293,7 +293,7 @@ func (h *BoxHandler) DeleteBox(req *restful.Request, resp *restful.Response) {
 	// Parse request body directly into model.BoxDeleteParams
 	var deleteParams model.BoxDeleteParams
 	if err := req.ReadEntity(&deleteParams); err != nil {
-		deleteParams.Force = false // Default
+		deleteParams.Force = true // Default
 	}
 
 	result, err := h.service.Delete(req.Request.Context(), boxID, &deleteParams)

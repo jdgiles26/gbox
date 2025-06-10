@@ -1,6 +1,6 @@
 import { withLogging } from "../utils.js";
 import { config } from "../config.js";
-import { Gbox } from "../service/index.js";
+import { Gbox } from "../gboxsdk/index.js";
 import { z } from "zod";
 import type { Logger } from '../mcp-logger.js';
 
@@ -36,7 +36,6 @@ export const handleRunBash = withLogging(
     // Get or create box
     const result = await gbox.boxes.getOrCreateBox({
       boxId,
-      image: config.images.playwright,
       sessionId,
       signal,
     });
@@ -77,10 +76,8 @@ export const handleRunBash = withLogging(
     // Run command
     const runResult = await gbox.boxes.runInBox(
       result.boxId,
-      ["/bin/bash"],
+      "bash",
       code,
-      100, // stdoutLineLimit
-      100, // stderrLineLimit
       { signal, sessionId }
     );
 

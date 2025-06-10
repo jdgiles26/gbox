@@ -25,19 +25,6 @@ const defaultStopTimeout = 10 * time.Second
 
 // Create implements Service.Create
 func (s *Service) Create(ctx context.Context, params *model.BoxCreateParams, progressWriter io.Writer) (*model.Box, error) {
-	// Handle SDK format (inline parameters with Type field)
-	if params.LinuxAndroidBoxCreateParam != nil && params.Type != "" {
-		switch params.Type {
-		case "android":
-			return nil, fmt.Errorf("Android box creation is not supported yet, please use the cloud version")
-		case "linux":
-			s.logger.Info("Creating Linux box with SDK parameters: %+v", params.LinuxAndroidBoxCreateParam)
-			return s.createLinuxBox(ctx, params.LinuxAndroidBoxCreateParam, progressWriter)
-		default:
-			return nil, fmt.Errorf("unsupported box type: %s", params.Type)
-		}
-	}
-
 	// Handle legacy format (individual parameters)
 	s.logger.Info("Creating box with legacy parameters: %+v", params)
 	// Original logic continues if both new parameters are nil
@@ -204,7 +191,7 @@ func (s *Service) Create(ctx context.Context, params *model.BoxCreateParams, pro
 // createLinuxBox creates an Alpine Linux box with specific parameters
 func (s *Service) createLinuxBox(ctx context.Context, params *model.LinuxAndroidBoxCreateParam, progressWriter io.Writer) (*model.Box, error) {
 	// Use Alpine Linux as the default image
-	img := "alpine:latest"
+	img := GetImage("")
 
 	// Check if image exists
 	_, _, err := s.client.ImageInspectWithRaw(ctx, img)

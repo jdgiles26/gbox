@@ -1,5 +1,5 @@
 import { withLogging } from "../utils.js";
-import { Gbox } from "../service/index.js";
+import { Gbox } from "../gboxsdk/index";
 import type { Logger } from '../mcp-logger.js';
 
 export const LIST_BOXES_TOOL = "list-boxes";
@@ -15,7 +15,7 @@ export const handleListBoxes = withLogging(
     logger.info(`Found ${boxesDetails.count} boxes`);
 
     // Extract only the 'attrs' part from each box for a cleaner output
-    const boxAttributes = boxesDetails.boxes.map(box => box.attrs);
+    const boxAttributes = boxesDetails.boxes.map(box => box.config);
 
     return {
       content: [

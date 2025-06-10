@@ -1,5 +1,5 @@
 import { withLogging } from "../utils.js";
-import { Gbox } from "../service/index.js";
+import { Gbox } from "../gboxsdk/index.js";
 import type { Logger } from '../mcp-logger.js';
 import { z } from "zod";
 
@@ -22,12 +22,12 @@ export const handleWriteFile = withLogging(
 
     logger.info(`Writing to file: ${path} from box: ${boxId}`);
 
-    const file = await gbox.files.writeFile(
+    const result = await gbox.files.writeFile(
       boxId,
       path,
       content
     );
-    if (!file) {
+    if (!result) {
       return {
         content: [
           {
@@ -42,7 +42,7 @@ export const handleWriteFile = withLogging(
       content: [
         {
           type: "text" as const,
-          text: `File written successfully to ${file.path}`,
+          text: `File written successfully to ${path}`,
         },
       ],
     };
