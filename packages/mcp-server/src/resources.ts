@@ -1,10 +1,10 @@
-import { config } from "./config.js";
-import { Gbox } from "./service/index.js";
+import { Gbox } from "./gboxsdk/index.js";
 import {
   withLogging,
   withLoggingResourceTemplate,
 } from "./utils.js";
 import type { Logger } from "./mcp-logger.js";
+import { LinuxBoxOperator } from "gbox-sdk/wrapper/box/linux";
 
 // Box interface
 interface Box {
@@ -29,11 +29,11 @@ const boxTemplate = withLoggingResourceTemplate("gbox:///boxes/{boxId}", {
     }
 
     logger.info("Mapping boxes to resource format");
-    const resources = response.boxes.map((box: Box) => {
+    const resources = response.boxes.map((box: LinuxBoxOperator) => {
       const resource = {
         uri: `gbox:///boxes/${box.id}`,
         name: `Box ${box.id}`,
-        description: `Status: ${box.status}, Image: ${box.image}. Note: When executing code, if the box is stopped, it will be automatically started first. This is suitable when previous processes have stopped but disk contents are preserved.`,
+        description: `Status: ${box.status}, Image: babelcloud/gbox-playwright. Note: When executing code, if the box is stopped, it will be automatically started first. This is suitable when previous processes have stopped but disk contents are preserved.`,
         mimeType: "application/json",
       };
       logger.debug(`Mapped box ${box.id} to resource`);

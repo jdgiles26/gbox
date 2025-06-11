@@ -2,7 +2,6 @@ import { withLogging } from "../utils.js";
 import { config } from "../config.js";
 import { Gbox } from "../gboxsdk/index.js";
 import { z } from "zod";
-import { GBoxFile, FILE_SIZE_LIMITS } from "../service/gbox.instance.js";
 import type { Logger } from '../mcp-logger.js';
 
 export const READ_FILE_TOOL = "read-file";
@@ -18,109 +17,6 @@ export const readFileParams = {
     .describe(`The path to the file in the share directory. Must start with /`),
   boxId: z.string().describe(`The ID of the box to read the file from.`),
 };
-
-// Helper function to handle file content based on type and size
-async function handleFileContent(
-  file: GBoxFile,
-  signal: AbortSignal,
-  logger: Logger
-) {
-  // For directories, return error
-  if (file.type === "dir") {
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: "Cannot read directory content",
-        },
-      ],
-      isError: true,
-    };
-  }
-
-  // For small text files (less than 1MB), return content directly
-  if (file.mime?.startsWith("text/") && file.size < FILE_SIZE_LIMITS.TEXT) {
-    const text = await file.readText();
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: text || "",
-        },
-      ],
-    };
-  }
-
-  // For small images (less than 5MB), return base64 encoded content
-  if (
-    file.mime?.startsWith("image/") &&
-    file.size < FILE_SIZE_LIMITS.BINARY
-  ) {
-    logger.info(`Reading image file: ${file.path}`);
-    const buffer = await file.read();
-    if (!buffer) {
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: "Failed to read image file",
-          },
-        ],
-        isError: true,
-      };
-    }
-    const base64 = Buffer.from(buffer).toString("base64");
-    logger.info("base64: ", base64);
-    return {
-      content: [
-        {
-          type: "image" as const,
-          data: base64,
-          mimeType: file.mime!,
-        },
-      ],
-    };
-  }
-
-  // For small audio files (less than 5MB), return base64 encoded content
-  if (
-    file.mime?.startsWith("audio/") &&
-    file.size < FILE_SIZE_LIMITS.BINARY
-  ) {
-    const buffer = await file.read();
-    if (!buffer) {
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: "Failed to read audio file",
-          },
-        ],
-        isError: true,
-      };
-    }
-    const base64 = Buffer.from(buffer).toString("base64");
-    return {
-      content: [
-        {
-          type: "audio" as const,
-          data: base64,
-          mimeType: file.mime!,
-        },
-      ],
-    };
-  }
-
-  // For large files or unsupported types, return resource URI
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: `${config.apiServer.url}/files/${file.path}`,
-      },
-    ],
-  };
-}
 
 // Read file handler
 export const handleReadFile = withLogging(
