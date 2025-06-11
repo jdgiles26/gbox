@@ -47,8 +47,8 @@ func (s *FileService) WriteFile(ctx context.Context, boxID string, path string, 
 	// If the file is not in the share directory, we need to copy it to the sandbox
 	if !strings.HasPrefix(cleanPath, "/"+boxID+common.DefaultShareDirPath) {
 		pathInBox := filepath.Join(common.DefaultShareDirPath, path)
-		_, err := s.boxSvc.Run(ctx, boxID, &boxModel.BoxRunParams{
-			Cmd: []string{"cp", pathInBox, path},
+		_, err := s.boxSvc.RunCode(ctx, boxID, &boxModel.BoxRunCodeParams{
+			Argv: []string{"cp", pathInBox, path},
 		})
 		if err != nil {
 			return nil, fmt.Errorf("error copying file to sandbox: %v", err)

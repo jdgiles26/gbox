@@ -30,19 +30,40 @@ func (s *Service) Exec(ctx context.Context, id string, req *model.BoxExecParams)
 		return nil, fmt.Errorf("box %s is not running (current state: %s)", id, containerInfo.State)
 	}
 
-	// Create exec configuration
+	// Apply timeout if specified
+	if req.Timeout != "" {
+		if duration, err := time.ParseDuration(req.Timeout); err == nil {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, duration)
+			defer cancel()
+		}
+	}
+
+	// Set working directory
+	workingDir := common.DefaultWorkDirPath
+	if req.WorkingDir != "" {
+		workingDir = req.WorkingDir
+	}
+
+	// Convert envs to []string
+	envs := make([]string, 0, len(req.Envs))
+	for k, v := range req.Envs {
+		envs = append(envs, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	// Create exec configuration (non-interactive)
 	execConfig := types.ExecConfig{
 		User:         "", // Use default user
 		Privileged:   false,
-		Tty:          req.TTY,
-		AttachStdin:  req.Stdin,
+		Tty:          false, // Non-interactive
+		AttachStdin:  false, // No stdin for non-interactive
 		AttachStdout: true,
 		AttachStderr: true,
 		Detach:       false,
-		DetachKeys:   "",  // Use default detach keys
-		Env:          nil, // No additional environment variables
-		WorkingDir:   common.DefaultWorkDirPath,
-		Cmd:          append(req.Commands, req.Args...),
+		DetachKeys:   "", // Use default detach keys
+		Env:          envs,
+		WorkingDir:   workingDir,
+		Cmd:          req.Commands,
 	}
 
 	// Create exec instance
@@ -54,91 +75,15 @@ func (s *Service) Exec(ctx context.Context, id string, req *model.BoxExecParams)
 	// Attach to exec instance
 	attachResp, err := s.client.ContainerExecAttach(ctx, execResp.ID, types.ExecStartCheck{
 		Detach: false,
-		Tty:    req.TTY,
+		Tty:    false,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to attach to exec: %w", err)
 	}
 	defer attachResp.Close()
 
-	// Create channels for stream handling
-	stdinDone := make(chan struct{})
-	stdoutDone := make(chan error, 1)
-
-	// Start streaming
-	if req.TTY {
-		// For TTY sessions, directly copy the raw stream
-		go func() {
-			if _, err := io.Copy(req.Conn, attachResp.Reader); err != nil {
-				if err != io.EOF && !isConnectionClosed(err) {
-					stdoutDone <- err
-				}
-			}
-			// Close the client connection to signal EOF
-			if closer, ok := req.Conn.(interface{ CloseWrite() error }); ok {
-				closer.CloseWrite()
-			}
-			close(stdoutDone)
-		}()
-
-		if execConfig.AttachStdin {
-			go func() {
-				s.handleStdin(req.Conn, attachResp.Conn)
-				// Try to close write end of the connection if possible
-				if closeWriter, ok := attachResp.Conn.(interface{ CloseWrite() error }); ok {
-					if err := closeWriter.CloseWrite(); err != nil {
-						s.logger.Error("Error closing write end: %v", err)
-					}
-				}
-				close(stdinDone)
-			}()
-		} else {
-			close(stdinDone)
-		}
-	} else {
-		// For non-TTY sessions, use multiplexed streaming
-		s.logger.Debug("Starting multiplexed stream")
-		go func() {
-			s.streamMultiplexed(attachResp.Reader, req.Conn)
-			// Close the client connection to signal EOF
-			if closer, ok := req.Conn.(interface{ CloseWrite() error }); ok {
-				closer.CloseWrite()
-			}
-			close(stdoutDone)
-		}()
-
-		if execConfig.AttachStdin {
-			go func() {
-				s.handleStdin(req.Conn, attachResp.Conn)
-				// Try to close write end of the connection if possible
-				if closeWriter, ok := attachResp.Conn.(interface{ CloseWrite() error }); ok {
-					if err := closeWriter.CloseWrite(); err != nil {
-						s.logger.Error("Error closing write end: %v", err)
-					}
-				}
-				close(stdinDone)
-			}()
-		} else {
-			close(stdinDone)
-		}
-	}
-
-	// Wait for stdin to finish first
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-stdinDone:
-	}
-
-	// Then wait for stdout/stderr to complete
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case err := <-stdoutDone:
-		if err != nil && !isConnectionClosed(err) {
-			return nil, fmt.Errorf("stream error: %w", err)
-		}
-	}
+	// Collect output
+	stdout, stderr := s.collectOutput(attachResp.Reader, -1, -1)
 
 	// Get exit code
 	inspectResp, err := s.client.ContainerExecInspect(ctx, execResp.ID)
@@ -148,6 +93,8 @@ func (s *Service) Exec(ctx context.Context, id string, req *model.BoxExecParams)
 
 	return &model.BoxExecResult{
 		ExitCode: inspectResp.ExitCode,
+		Stdout:   stdout,
+		Stderr:   stderr,
 	}, nil
 }
 
@@ -221,8 +168,8 @@ func (s *Service) collectOutput(reader io.Reader, stdoutLimit, stderrLimit int) 
 	return stdout, stderr
 }
 
-// Run implements Service.Run
-func (s *Service) Run(ctx context.Context, id string, req *model.BoxRunParams) (*model.BoxRunResult, error) {
+// RunCode implements Service.RunCode
+func (s *Service) RunCode(ctx context.Context, id string, req *model.BoxRunCodeParams) (*model.BoxRunCodeResult, error) {
 	// Update access time on run
 	s.accessTracker.Update(id)
 
@@ -236,54 +183,52 @@ func (s *Service) Run(ctx context.Context, id string, req *model.BoxRunParams) (
 		return nil, fmt.Errorf("box %s is not running (current state: %s)", id, containerInfo.State)
 	}
 
-	// Set default line limits if not specified
-	if req.StdoutLineLimit == 0 {
-		req.StdoutLineLimit = 100
+	// Prepare command and stdin
+	cmd, stdin, err := s.prepareRunCodeCommand(req)
+	if err != nil {
+		return nil, err
 	}
-	if req.StderrLineLimit == 0 {
-		req.StderrLineLimit = 100
+
+	// Execute the command
+	return s.executeRunCode(ctx, containerInfo.ID, cmd, stdin, req)
+}
+
+// prepareRunCodeCommand prepares the command and stdin for code execution
+func (s *Service) prepareRunCodeCommand(req *model.BoxRunCodeParams) ([]string, string, error) {
+	if req.Code == "" || req.Language == "" {
+		return nil, "", fmt.Errorf("code and language are required for run-code functionality")
 	}
 
 	var cmd []string
 	var stdin string
 
-	// Check if Code and Type are both present for run-code functionality
-	if req.Code != "" && req.Language != "" {
-		// Use run-code capability based on Type
-		switch req.Language {
-		case "python3":
-			cmd = []string{"python3"}
-			stdin = req.Code
-		case "typescript":
-			cmd = []string{"npx", "ts-node"}
-			stdin = req.Code
-		case "bash":
-			cmd = []string{"sh", "-c", req.Code}
-			stdin = ""
-		default:
-			return nil, fmt.Errorf("unsupported code type: %s", req.Language)
-		}
-	} else {
-		// Use original cmd/argv functionality
-		cmd = append(req.Cmd, req.Argv...)
-		stdin = req.Stdin
+	switch req.Language {
+	case "python3":
+		cmd = []string{"python3"}
+		stdin = req.Code
+	case "typescript":
+		cmd = []string{"npx", "ts-node"}
+		stdin = req.Code
+	case "bash":
+		cmd = []string{"sh", "-c", req.Code}
+		stdin = ""
+	default:
+		return nil, "", fmt.Errorf("unsupported code type: %s", req.Language)
 	}
 
-	execConfig := types.ExecConfig{
-		User:         "", // Use default user
-		Privileged:   false,
-		Tty:          false, // Run commands typically don't need TTY
-		AttachStdin:  stdin != "",
-		AttachStdout: true,
-		AttachStderr: true,
-		Detach:       false,
-		DetachKeys:   "",  // Use default detach keys
-		Env:          nil, // No additional environment variables
-		WorkingDir:   common.DefaultWorkDirPath,
-		Cmd:          cmd,
-	}
+	// Add argv to cmd
+	cmd = append(cmd, req.Argv...)
 
-	execResp, err := s.client.ContainerExecCreate(ctx, containerInfo.ID, execConfig)
+	return cmd, stdin, nil
+}
+
+// executeRunCode executes the prepared command and collects results
+func (s *Service) executeRunCode(ctx context.Context, containerID string, cmd []string, stdin string, req *model.BoxRunCodeParams) (*model.BoxRunCodeResult, error) {
+	// Create exec configuration
+	execConfig := s.createRunCodeExecConfig(cmd, stdin, req)
+
+	// Create and attach to exec instance
+	execResp, err := s.client.ContainerExecCreate(ctx, containerID, execConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create exec: %w", err)
 	}
@@ -297,62 +242,117 @@ func (s *Service) Run(ctx context.Context, id string, req *model.BoxRunParams) (
 	}
 	defer attachResp.Close()
 
-	// Create channels for collecting output
-	outputChan := make(chan struct {
-		stdout string
-		stderr string
-	})
-	exitCodeChan := make(chan int)
+	// Handle stdin and collect output
+	return s.handleRunCodeExecution(ctx, execResp.ID, attachResp, stdin)
+}
 
-	// Start goroutine to collect output
-	go func() {
-		stdout, stderr := s.collectOutput(attachResp.Reader, req.StdoutLineLimit, req.StderrLineLimit)
-		outputChan <- struct {
-			stdout string
-			stderr string
-		}{stdout, stderr}
-	}()
-
-	// Write stdin if provided
-	if stdin != "" {
-		go func() {
-			_, err := io.WriteString(attachResp.Conn, stdin)
-			if err != nil {
-				s.logger.Error("Error writing stdin: %v", err)
-			}
-			// Close write end of the connection to signal EOF
-			if closer, ok := attachResp.Conn.(interface{ CloseWrite() error }); ok {
-				closer.CloseWrite()
-			}
-		}()
+// createRunCodeExecConfig creates the exec configuration for running code
+func (s *Service) createRunCodeExecConfig(cmd []string, stdin string, req *model.BoxRunCodeParams) types.ExecConfig {
+	// Set working directory
+	workingDir := common.DefaultWorkDirPath
+	if req.WorkingDir != "" {
+		workingDir = req.WorkingDir
 	}
 
-	// Wait for exec to complete and get exit code
+	// Convert envs to []string
+	envs := make([]string, 0, len(req.Envs))
+	for k, v := range req.Envs {
+		envs = append(envs, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	return types.ExecConfig{
+		User:         "", // Use default user
+		Privileged:   false,
+		Tty:          false, // Run commands typically don't need TTY
+		AttachStdin:  stdin != "",
+		AttachStdout: true,
+		AttachStderr: true,
+		Detach:       false,
+		DetachKeys:   "", // Use default detach keys
+		Env:          envs,
+		WorkingDir:   workingDir,
+		Cmd:          cmd,
+	}
+}
+
+// handleRunCodeExecution handles the execution, stdin writing, and output collection
+func (s *Service) handleRunCodeExecution(ctx context.Context, execID string, attachResp types.HijackedResponse, stdin string) (*model.BoxRunCodeResult, error) {
+	// Use a single channel for coordination
+	type executionResult struct {
+		stdout   string
+		stderr   string
+		exitCode int
+		err      error
+	}
+
+	resultChan := make(chan executionResult, 1)
+
+	// Start goroutine to handle the entire execution
 	go func() {
-		inspectResp, err := s.client.ContainerExecInspect(ctx, execResp.ID)
+		defer close(resultChan)
+
+		// Write stdin if provided
+		if stdin != "" {
+			if err := s.writeStdinForRunCode(attachResp.Conn, stdin); err != nil {
+				resultChan <- executionResult{err: fmt.Errorf("failed to write stdin: %w", err)}
+				return
+			}
+		}
+
+		// Collect output
+		stdout, stderr := s.collectOutput(attachResp.Reader, -1, -1)
+
+		// Get exit code
+		exitCode, err := s.getExecExitCode(ctx, execID)
 		if err != nil {
-			s.logger.Error("Error inspecting exec: %v", err)
-			exitCodeChan <- -1
+			resultChan <- executionResult{err: fmt.Errorf("failed to get exit code: %w", err)}
 			return
 		}
-		exitCodeChan <- inspectResp.ExitCode
+
+		resultChan <- executionResult{
+			stdout:   stdout,
+			stderr:   stderr,
+			exitCode: exitCode,
+		}
 	}()
 
-	// Collect results
-	output := <-outputChan
-	exitCode := <-exitCodeChan
+	// Wait for completion or context cancellation
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case result := <-resultChan:
+		if result.err != nil {
+			return nil, result.err
+		}
+		return &model.BoxRunCodeResult{
+			ExitCode: result.exitCode,
+			Stdout:   result.stdout,
+			Stderr:   result.stderr,
+		}, nil
+	}
+}
 
-	return &model.BoxRunResult{
-		Box: model.Box{
-			ID:        containerInfo.Labels[labelID],
-			Status:    containerInfo.State,
-			Image:     containerInfo.Image,
-			CreatedAt: time.Unix(containerInfo.Created, 0),
-		},
-		ExitCode: exitCode,
-		Stdout:   output.stdout,
-		Stderr:   output.stderr,
-	}, nil
+// writeStdinForRunCode writes stdin data and closes the write end
+func (s *Service) writeStdinForRunCode(writer io.Writer, stdin string) error {
+	if _, err := io.WriteString(writer, stdin); err != nil {
+		return err
+	}
+
+	// Close write end of the connection to signal EOF
+	if closer, ok := writer.(interface{ CloseWrite() error }); ok {
+		return closer.CloseWrite()
+	}
+
+	return nil
+}
+
+// getExecExitCode gets the exit code of an exec instance
+func (s *Service) getExecExitCode(ctx context.Context, execID string) (int, error) {
+	inspectResp, err := s.client.ContainerExecInspect(ctx, execID)
+	if err != nil {
+		return -1, err
+	}
+	return inspectResp.ExitCode, nil
 }
 
 // isConnectionClosed checks if the error is due to a closed connection
@@ -364,62 +364,64 @@ func isConnectionClosed(err error) bool {
 		strings.Contains(err.Error(), "io: read/write on closed pipe")
 }
 
+// --- Stream-related methods (temporarily commented out for future stream support) ---
+
 // streamMultiplexed handles multiplexed streaming of stdout and stderr
-func (s *Service) streamMultiplexed(reader io.Reader, writer io.Writer) {
-	header := make([]byte, 8)
-	for {
-		// Read header
-		_, err := io.ReadFull(reader, header)
-		if err != nil {
-			if err != io.EOF && !isConnectionClosed(err) {
-				s.logger.Error("Error reading stream header: %v", err)
-			}
-			return
-		}
+// func (s *Service) streamMultiplexed(reader io.Reader, writer io.Writer) {
+// 	header := make([]byte, 8)
+// 	for {
+// 		// Read header
+// 		_, err := io.ReadFull(reader, header)
+// 		if err != nil {
+// 			if err != io.EOF && !isConnectionClosed(err) {
+// 				s.logger.Error("Error reading stream header: %v", err)
+// 			}
+// 			return
+// 		}
 
-		// Parse header
-		streamType := header[0]
-		frameSize := binary.BigEndian.Uint32(header[4:])
+// 		// Parse header
+// 		streamType := header[0]
+// 		frameSize := binary.BigEndian.Uint32(header[4:])
 
-		// Read frame
-		frame := make([]byte, frameSize)
-		_, err = io.ReadFull(reader, frame)
-		if err != nil {
-			if err != io.EOF && !isConnectionClosed(err) {
-				s.logger.Error("Error reading stream frame: %v", err)
-			}
-			return
-		}
+// 		// Read frame
+// 		frame := make([]byte, frameSize)
+// 		_, err = io.ReadFull(reader, frame)
+// 		if err != nil {
+// 			if err != io.EOF && !isConnectionClosed(err) {
+// 				s.logger.Error("Error reading stream frame: %v", err)
+// 			}
+// 			return
+// 		}
 
-		// Write header and frame to client
-		if _, err := writer.Write(header); err != nil {
-			if !isConnectionClosed(err) {
-				s.logger.Error("Error writing stream header: %v", err)
-			}
-			return
-		}
-		if _, err := writer.Write(frame); err != nil {
-			if !isConnectionClosed(err) {
-				s.logger.Error("Error writing stream frame: %v", err)
-			}
-			return
-		}
+// 		// Write header and frame to client
+// 		if _, err := writer.Write(header); err != nil {
+// 			if !isConnectionClosed(err) {
+// 				s.logger.Error("Error writing stream header: %v", err)
+// 			}
+// 			return
+// 		}
+// 		if _, err := writer.Write(frame); err != nil {
+// 			if !isConnectionClosed(err) {
+// 				s.logger.Error("Error writing stream frame: %v", err)
+// 			}
+// 			return
+// 		}
 
-		// Log stream type and size for debugging
-		s.logger.Debug("Stream type: %d, size: %d", streamType, frameSize)
-	}
-}
+// 		// Log stream type and size for debugging
+// 		s.logger.Debug("Stream type: %d, size: %d", streamType, frameSize)
+// 	}
+// }
 
 // handleStdin handles stdin stream
-func (s *Service) handleStdin(reader io.Reader, writer io.Writer) {
-	_, err := io.Copy(writer, reader)
-	if err != nil && !isConnectionClosed(err) {
-		s.logger.Error("Error copying stdin: %v", err)
-	}
-	// Signal EOF to the container
-	if closer, ok := writer.(interface{ CloseWrite() error }); ok {
-		if err := closer.CloseWrite(); err != nil {
-			s.logger.Error("Error closing write end: %v", err)
-		}
-	}
-}
+// func (s *Service) handleStdin(reader io.Reader, writer io.Writer) {
+// 	_, err := io.Copy(writer, reader)
+// 	if err != nil && !isConnectionClosed(err) {
+// 		s.logger.Error("Error copying stdin: %v", err)
+// 	}
+// 	// Signal EOF to the container
+// 	if closer, ok := writer.(interface{ CloseWrite() error }); ok {
+// 		if err := closer.CloseWrite(); err != nil {
+// 			s.logger.Error("Error closing write end: %v", err)
+// 		}
+// 	}
+// }

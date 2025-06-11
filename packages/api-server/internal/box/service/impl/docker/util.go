@@ -204,6 +204,10 @@ func containerToBox(c interface{}) *model.Box {
 			Os: model.LinuxAndroidBoxConfigOs{
 				Version: "", // Could be detected from image
 			},
+			Resolution: model.LinuxAndroidBoxConfigResolution{
+				Width:  1920, // Default resolution
+				Height: 1080,
+			},
 		},
 	}
 }

@@ -245,10 +245,15 @@ func (h *BoxHandler) CreateBox(req *restful.Request, resp *restful.Response) {
 
 func (h *BoxHandler) CreateLinuxBox(req *restful.Request, resp *restful.Response) {
 	// Read request body directly into the internal model type
-	var createParams model.LinuxBoxCreateParam
+	var createParams model.LinuxAndroidBoxCreateParam
 	if err := req.ReadEntity(&createParams); err != nil {
 		writeError(resp, http.StatusBadRequest, "InvalidRequest", err.Error())
 		return
+	}
+
+	// Wrap in LinuxBoxCreateParam for service call compatibility
+	linuxBoxParams := &model.LinuxBoxCreateParam{
+		CreateLinuxBox: createParams,
 	}
 
 	// check if the client wants a stream response
@@ -264,12 +269,12 @@ func (h *BoxHandler) CreateLinuxBox(req *restful.Request, resp *restful.Response
 			}
 			return h.service.CreateLinuxBox(ctx, cp, progressWriter)
 		}
-		h.streamServiceOperation(req, resp, &createParams, createLinuxBoxServiceCall, true)
+		h.streamServiceOperation(req, resp, linuxBoxParams, createLinuxBoxServiceCall, true)
 		return
 	}
 
 	// standard JSON response (non-streaming) - wait for operation to complete
-	box, err := h.service.CreateLinuxBox(req.Request.Context(), &createParams, nil)
+	box, err := h.service.CreateLinuxBox(req.Request.Context(), linuxBoxParams, nil)
 	if err != nil {
 		writeError(resp, http.StatusInternalServerError, "CreateLinuxBoxError", err.Error())
 		return
@@ -338,7 +343,93 @@ func (h *BoxHandler) ReclaimBoxes(req *restful.Request, resp *restful.Response) 
 	resp.WriteHeaderAndEntity(http.StatusOK, result)
 }
 
-// ExecBox handles command execution via HTTP Hijacking (existing method)
+// --- Original ExecBox with hijacking (temporarily commented out for future stream support) ---
+//
+// ExecBox handles command execution via HTTP Hijacking (original method)
+// func (h *BoxHandler) ExecBox(req *restful.Request, resp *restful.Response) {
+// 	boxID := req.PathParameter("id")
+
+// 	// Get Box status first
+// 	box, err := h.service.Get(req.Request.Context(), boxID)
+// 	if err != nil {
+// 		if err == service.ErrBoxNotFound {
+// 			writeError(resp, http.StatusNotFound, "BoxNotFound", err.Error())
+// 			return
+// 		}
+// 		writeError(resp, http.StatusInternalServerError, "GetBoxError", fmt.Sprintf("Failed to get box status: %v", err))
+// 		return
+// 	}
+
+// 	// Check if the box is running
+// 	if box.Status != "running" {
+// 		log.Warnf("ExecBox: Box %s is not running (state: %s). Returning 409 Conflict.", boxID, box.Status)
+// 		writeError(resp, http.StatusConflict, "BoxNotRunning", fmt.Sprintf("Box %s is not running (state: %s), please start it first", boxID, box.Status))
+// 		return
+// 	}
+
+// 	// Read request body directly into model.BoxExecParams
+// 	var execReq model.BoxExecParams
+// 	if err := req.ReadEntity(&execReq); err != nil {
+// 		writeError(resp, http.StatusBadRequest, "InvalidRequest", err.Error())
+// 		return
+// 	}
+
+// 	// Hijack the connection logic...
+// 	upgrade := req.HeaderParameter("Upgrade")
+// 	connection := req.HeaderParameter("Connection")
+// 	accept := req.HeaderParameter("Accept")
+// 	if accept == "" {
+// 		accept = mediaTypeMultiplexedStream // Use local constant
+// 	}
+
+// 	if accept != mediaTypeRawStream && accept != mediaTypeMultiplexedStream {
+// 		writeError(resp, http.StatusNotAcceptable, "UnsupportedMediaType", fmt.Sprintf("Unsupported Accept header: %s", accept))
+// 		return
+// 	}
+
+// 	httpResp := resp.ResponseWriter
+// 	hijacker, ok := httpResp.(http.Hijacker)
+// 	if !ok {
+// 		writeError(resp, http.StatusInternalServerError, "HijackError", "response does not support hijacking")
+// 		return
+// 	}
+
+// 	clientConn, _, err := hijacker.Hijack()
+// 	if err != nil {
+// 		// Cannot write error after potential partial hijack, just log
+// 		log.Errorf("ExecBox [%s]: Failed to hijack connection: %v", boxID, err)
+// 		return
+// 	}
+// 	defer clientConn.Close()
+
+// 	// Set the connection in the execReq
+// 	execReq.Conn = clientConn
+
+// 	// Write HTTP response headers directly to the hijacked connection
+// 	writeResponseHeaders(execReq.Conn, upgrade, connection, execReq.TTY)
+
+// 	// Execute command and handle streaming using the original service method
+// 	result, err := h.service.Exec(req.Request.Context(), boxID, &execReq)
+// 	if err != nil {
+// 		// Cannot write standard error after hijack, just log
+// 		if err == service.ErrBoxNotFound {
+// 			log.Errorf("ExecBox [%s]: Box not found during exec: %v", boxID, err)
+// 		} else {
+// 			log.Errorf("ExecBox [%s]: Error during hijacked exec: %v", boxID, err)
+// 		}
+// 		// Connection will be closed by defer
+// 		return
+// 	}
+
+// 	// Log the exit code, cannot write response entity after hijack
+// 	if result != nil {
+// 		log.Infof("ExecBox [%s]: Hijacked command finished with exit code: %d", boxID, result.ExitCode)
+// 	} else {
+// 		log.Warnf("ExecBox [%s]: Hijacked command finished but result was nil", boxID)
+// 	}
+// }
+
+// ExecBox handles command execution via standard JSON API (simplified, non-streaming)
 func (h *BoxHandler) ExecBox(req *restful.Request, resp *restful.Response) {
 	boxID := req.PathParameter("id")
 
@@ -367,59 +458,19 @@ func (h *BoxHandler) ExecBox(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
-	// Hijack the connection logic remains the same...
-	upgrade := req.HeaderParameter("Upgrade")
-	connection := req.HeaderParameter("Connection")
-	accept := req.HeaderParameter("Accept")
-	if accept == "" {
-		accept = mediaTypeMultiplexedStream // Use local constant
-	}
-
-	if accept != mediaTypeRawStream && accept != mediaTypeMultiplexedStream {
-		writeError(resp, http.StatusNotAcceptable, "UnsupportedMediaType", fmt.Sprintf("Unsupported Accept header: %s", accept))
-		return
-	}
-
-	httpResp := resp.ResponseWriter
-	hijacker, ok := httpResp.(http.Hijacker)
-	if !ok {
-		writeError(resp, http.StatusInternalServerError, "HijackError", "response does not support hijacking")
-		return
-	}
-
-	clientConn, _, err := hijacker.Hijack()
-	if err != nil {
-		// Cannot write error after potential partial hijack, just log
-		log.Errorf("ExecBox [%s]: Failed to hijack connection: %v", boxID, err)
-		return
-	}
-	defer clientConn.Close()
-
-	// Set the connection in the execReq
-	execReq.Conn = clientConn
-
-	// Write HTTP response headers directly to the hijacked connection
-	writeResponseHeaders(execReq.Conn, upgrade, connection, execReq.TTY)
-
-	// Execute command and handle streaming using the original service method
+	// Execute command using simplified service method
 	result, err := h.service.Exec(req.Request.Context(), boxID, &execReq)
 	if err != nil {
-		// Cannot write standard error after hijack, just log
 		if err == service.ErrBoxNotFound {
-			log.Errorf("ExecBox [%s]: Box not found during exec: %v", boxID, err)
-		} else {
-			log.Errorf("ExecBox [%s]: Error during hijacked exec: %v", boxID, err)
+			writeError(resp, http.StatusNotFound, "BoxNotFound", err.Error())
+			return
 		}
-		// Connection will be closed by defer
+		writeError(resp, http.StatusInternalServerError, "ExecBoxError", err.Error())
 		return
 	}
 
-	// Log the exit code, cannot write response entity after hijack
-	if result != nil {
-		log.Infof("ExecBox [%s]: Hijacked command finished with exit code: %d", boxID, result.ExitCode)
-	} else {
-		log.Warnf("ExecBox [%s]: Hijacked command finished but result was nil", boxID)
-	}
+	// Return the result as JSON
+	resp.WriteHeaderAndEntity(http.StatusOK, result)
 }
 
 // ExecBoxWS handles command execution via WebSocket
@@ -498,13 +549,13 @@ func (h *BoxHandler) ExecBoxWS(req *restful.Request, resp *restful.Response) {
 func (h *BoxHandler) RunBox(req *restful.Request, resp *restful.Response) {
 	boxID := req.PathParameter("id")
 	// Read request body directly into model.BoxRunParams
-	var runReq model.BoxRunParams
+	var runReq model.BoxRunCodeParams
 	if err := req.ReadEntity(&runReq); err != nil {
 		writeError(resp, http.StatusBadRequest, "InvalidRequest", err.Error())
 		return
 	}
 
-	result, err := h.service.Run(req.Request.Context(), boxID, &runReq)
+	result, err := h.service.RunCode(req.Request.Context(), boxID, &runReq)
 	if err != nil {
 		if err == service.ErrBoxNotFound {
 			writeError(resp, http.StatusNotFound, "BoxNotFound", err.Error())
@@ -836,6 +887,8 @@ func writeError(resp *restful.Response, status int, code, message string) {
 		log.Warnf("Attempted to write error after headers were sent. Status: %d, Code: %s, Msg: %s", status, code, message)
 	}
 }
+
+// --- Hijacking-related helper functions (temporarily commented out for future stream support) ---
 
 // writeResponseHeaders writes HTTP response headers for Hijacked connection
 func writeResponseHeaders(w io.Writer, upgrade, connection string, tty bool) {

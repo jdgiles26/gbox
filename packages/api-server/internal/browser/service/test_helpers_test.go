@@ -96,8 +96,8 @@ func (m *mockBoxService) Start(ctx context.Context, id string) (*boxModel.BoxSta
 func (m *mockBoxService) Stop(ctx context.Context, id string) (*boxModel.BoxStopResult, error) {
 	return nil, fmt.Errorf("mockBoxService.Stop not implemented")
 }
-func (m *mockBoxService) Run(ctx context.Context, id string, params *boxModel.BoxRunParams) (*boxModel.BoxRunResult, error) {
-	return nil, fmt.Errorf("mockBoxService.Run not implemented")
+func (m *mockBoxService) RunCode(ctx context.Context, id string, params *boxModel.BoxRunCodeParams) (*boxModel.BoxRunCodeResult, error) {
+	return nil, fmt.Errorf("mockBoxService.RunCode not implemented")
 }
 func (m *mockBoxService) ExecWS(ctx context.Context, id string, params *boxModel.BoxExecWSParams, conn *websocket.Conn) (*boxModel.BoxExecResult, error) {
 	return nil, fmt.Errorf("mockBoxService.ExecWS not implemented")

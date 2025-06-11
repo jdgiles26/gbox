@@ -2,6 +2,7 @@ package docker
 
 import (
 	"context"
+	/*
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,15 +11,17 @@ import (
 	"strings"
 	"sync"
 	"time"
+	*/
 
-	"github.com/babelcloud/gbox/packages/api-server/internal/common"
+	// "github.com/babelcloud/gbox/packages/api-server/internal/common"
 	model "github.com/babelcloud/gbox/packages/api-server/pkg/box"
-	"github.com/docker/docker/api/types"
+	//"github.com/docker/docker/api/types"
 	"github.com/gorilla/websocket"
 )
 
 // ExecWS implements Service.ExecWS for WebSocket connections
 func (s *Service) ExecWS(ctx context.Context, id string, params *model.BoxExecWSParams, wsConn *websocket.Conn) (*model.BoxExecResult, error) {
+	/*
 	s.accessTracker.Update(id)
 
 	containerInfo, err := s.getContainerByID(ctx, id)
@@ -262,6 +265,8 @@ loop:
 	return &model.BoxExecResult{
 		ExitCode: exitCode,
 	}, nil
+	*/
+	return nil, nil
 }
 
 // wsWriter is a helper to wrap a websocket.Conn to satisfy io.Writer for io.Copy
