@@ -1,6 +1,6 @@
 import { withLogging } from "../utils.js";
 import { config } from "../config.js";
-import { Gbox } from "../service/index.js";
+import { Gbox } from "../gboxsdk/index.js";
 import { z } from "zod";
 import { GBoxFile, FILE_SIZE_LIMITS } from "../service/gbox.instance.js";
 import type { Logger } from '../mcp-logger.js';
@@ -130,7 +130,7 @@ export const handleReadFile = withLogging(
     // TODO: should check file meta, if file not changed, should not copy it
     // Copy the file from sandbox to the share directory
     const gbox = new Gbox();
-    const file = await gbox.files.shareFile(path, boxId, signal);
+    const file = await gbox.files.readFile(boxId, path, { signal });
 
     if (!file) {
       return {
@@ -146,16 +146,17 @@ export const handleReadFile = withLogging(
 
     logger.info(
       `File shared successfully: 
-      attrs: ${JSON.stringify(file.attrs, null, 2)}
-      mimeType: ${file.mime}
-      size: ${file.size}
+      content: ${file.content}
       `
     );
 
-    return handleFileContent(
-      file,
-      signal,
-      logger
-    );
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: file.content,
+        },
+      ],
+    };
   }
 );

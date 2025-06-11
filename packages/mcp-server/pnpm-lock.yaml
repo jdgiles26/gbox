@@ -26,6 +26,9 @@ importers:
       express:
         specifier: ^5.1.0
         version: 5.1.0
+      gbox-sdk:
+        specifier: ^0.1.1
+        version: 0.1.1
       zod:
         specifier: ^3.22.4
         version: 3.24.2
@@ -945,6 +948,9 @@ packages:
 
   function-bind@1.1.2:
     resolution: {integrity: sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA==}
+
+  gbox-sdk@0.1.1:
+    resolution: {integrity: sha512-t6u4+FxGi6sQfyISA4XKgV/kWVlHk9I2gKAvRjc0DWG+Y3e+8SHd+1zs55FsffSfQfC91c8l/ncsK9W61MxKOg==}
 
   get-intrinsic@1.3.0:
     resolution: {integrity: sha512-9fSjSaos/fRIVIp+xSJlE6lfwhES7LNtKaCBIamHsjr2na1BiABJPo0mOjjz8GJDURarmCPGqaiVg5mfjb98CQ==}
@@ -2413,6 +2419,8 @@ snapshots:
     optional: true
 
   function-bind@1.1.2: {}
+
+  gbox-sdk@0.1.1: {}
 
   get-intrinsic@1.3.0:
     dependencies:

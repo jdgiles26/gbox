@@ -1,6 +1,6 @@
 import { withLogging } from "../utils.js";
 import { config } from "../config.js";
-import { Gbox } from "../service/index.js";
+import { Gbox } from "../gboxsdk/index.js";
 import { z } from "zod";
 import type { Logger } from '../mcp-logger.js';
 
@@ -40,7 +40,6 @@ export const handleRunPython = withLogging(
     // Get or create box
     const result = await gbox.boxes.getOrCreateBox({
       boxId,
-      image: config.images.playwright,
       sessionId,
       signal,
     });
@@ -80,10 +79,8 @@ export const handleRunPython = withLogging(
     // Run command
     const runResult = await gbox.boxes.runInBox(
       result.boxId,
-      ["python3"],
+      "python3",
       code,
-      100, // stdoutLineLimit
-      100, // stderrLineLimit
       { signal, sessionId }
     );
 
@@ -95,7 +92,7 @@ export const handleRunPython = withLogging(
       content: [
         {
           type: "text" as const,
-          text: JSON.stringify(runResult, null, 2),
+          text: `stdout: ${runResult.stdout}\n stderr: ${runResult.stderr}`,
         },
       ],
     };

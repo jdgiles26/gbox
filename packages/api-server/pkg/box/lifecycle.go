@@ -52,7 +52,6 @@ type BoxCreateParams struct {
 // LinuxAndroidBoxCreateParam represents parameters for creating Linux or Android boxes
 // This struct is used inline in BoxCreateParams to support SDK format
 type LinuxAndroidBoxCreateParam struct {
-	Type    string               `json:"type"`              // Box type: "linux" or "android"
 	Timeout string               `json:"timeout,omitempty"` // Timeout for the box operation (e.g., "30s")
 	Wait    bool                 `json:"wait,omitempty"`    // Wait for the box operation to complete
 	Config  CreateBoxConfigParam `json:"config"`            // Box configuration
