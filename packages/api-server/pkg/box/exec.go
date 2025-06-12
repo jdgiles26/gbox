@@ -1,50 +1,44 @@
 package model
 
-import (
-	"io"
-)
-
 // BoxExecParams represents a request to execute a command in a box
 type BoxExecParams struct {
-	Commands []string           `json:"commands"`
-	Args     []string           `json:"args,omitempty"`
-	Stdin    bool               `json:"stdin,omitempty"`
-	Stdout   bool               `json:"stdout,omitempty"`
-	Stderr   bool               `json:"stderr,omitempty"`
-	TTY      bool               `json:"tty,omitempty"`
-	Conn     io.ReadWriteCloser `json:"-"` // Connection for streaming
+	// The command to run. Can be a single string or an array of strings
+	Commands []string `json:"commands"`
+	// The timeout of the command. e.g. '30s'
+	Timeout string `json:"timeout,omitempty"`
+	// The working directory of the command
+	WorkingDir string `json:"workingDir,omitempty"`
+	// The environment variables to run the command
+	Envs map[string]string `json:"envs,omitempty"`
 
-	Timeout    string `json:"timeout"` // timeout for the command execution
-	WorkingDir string `json:"workingDir,omitempty"` // Working directory inside the container
-	Envs       map[string]string `json:"envs,omitempty"` // Environment variables for the command execution
+	// --- Stream-related fields (temporarily commented out) ---
+	// Args     []string           `json:"args,omitempty"`
+	// Stdin    bool               `json:"stdin,omitempty"`
+	// Stdout   bool               `json:"stdout,omitempty"`
+	// Stderr   bool               `json:"stderr,omitempty"`
+	// TTY      bool               `json:"tty,omitempty"`
+	// Conn     io.ReadWriteCloser `json:"-"` // Connection for streaming
 }
 
 // BoxExecResult represents the response from an exec operation
 type BoxExecResult struct {
-	ExitCode int `json:"exitCode,omitempty"` // Exit code of the command
-	Stdout   string `json:"stdout,omitempty"` // Standard output from command execution
-	Stderr   string `json:"stderr,omitempty"` // Standard error from command execution
+	ExitCode int    `json:"exitCode"` // Exit code of the command
+	Stdout   string `json:"stdout"`   // Standard output from command execution
+	Stderr   string `json:"stderr"`   // Standard error from command execution
 }
 
 // BoxRunParams represents a request to run a command in a box
-type BoxRunParams struct {
-	Cmd             []string `json:"cmd,omitempty"`
-	Argv            []string `json:"argv,omitempty"`
-	Stdin           string   `json:"stdin,omitempty"`
-	StdoutLineLimit int      `json:"stdoutLineLimit,omitempty"`
-	StderrLineLimit int      `json:"stderrLineLimit,omitempty"`
-
-	// this is only supported for cloud version
-	Code      string `json:"code,omitempty"`
-	Language  string `json:"language,omitempty"` // type of the code to run, e.g. "python3", "typescript", "bash"
-	Timeout   string `json:"timeout,omitempty"`
-	WorkingDir string `json:"workingDir,omitempty"`
+type BoxRunCodeParams struct {
+	Code       string            `json:"code,omitempty"`
+	Language   string            `json:"language,omitempty"` // type of the code to run, e.g. "python3", "typescript", "bash"
+	Argv       []string          `json:"argv,omitempty"`     // arguments to run the code
+	Timeout    string            `json:"timeout,omitempty"`
+	WorkingDir string            `json:"workingDir,omitempty"`
 	Envs       map[string]string `json:"envs,omitempty"` // Environment variables for the command execution
 }
 
-// BoxRunResult represents the response from a run operation
-type BoxRunResult struct {
-	Box      Box    `json:"box"`                // Box where the command was executed
+// BoxRunCodeResult represents the response from a run operation
+type BoxRunCodeResult struct {
 	ExitCode int    `json:"exitCode,omitempty"` // Exit code of the command
 	Stdout   string `json:"stdout,omitempty"`   // Standard output from command execution
 	Stderr   string `json:"stderr,omitempty"`   // Standard error from command execution

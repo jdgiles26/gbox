@@ -23,15 +23,15 @@ func RegisterRoutes(ws *restful.WebService, boxHandler *BoxHandler) {
 		Returns(404, "Not Found", model.BoxError{}).
 		Returns(500, "Internal Server Error", model.BoxError{}))
 
-	ws.Route(ws.POST("/boxes").To(boxHandler.CreateBox).
-		Doc("create a box").
-		Reads(model.BoxCreateParams{}).
-		Produces("application/json", "application/json-stream").
-		Param(ws.QueryParameter("timeout", "timeout duration for image pull (e.g. 30s, 1m)").DataType("string").Required(false)).
-		Returns(201, "Created", model.Box{}).
-		Returns(202, "Accepted", model.BoxError{}).
-		Returns(400, "Bad Request", model.BoxError{}).
-		Returns(500, "Internal Server Error", model.BoxError{}))
+	// ws.Route(ws.POST("/boxes").To(boxHandler.CreateBox).
+	// 	Doc("create a box").
+	// 	Reads(model.BoxCreateParams{}).
+	// 	Produces("application/json", "application/json-stream").
+	// 	Param(ws.QueryParameter("timeout", "timeout duration for image pull (e.g. 30s, 1m)").DataType("string").Required(false)).
+	// 	Returns(201, "Created", model.Box{}).
+	// 	Returns(202, "Accepted", model.BoxError{}).
+	// 	Returns(400, "Bad Request", model.BoxError{}).
+	// 	Returns(500, "Internal Server Error", model.BoxError{}))
 
 	ws.Route(ws.POST("/boxes/linux").To(boxHandler.CreateLinuxBox).
 		Doc("create a linux box").
@@ -58,16 +58,16 @@ func RegisterRoutes(ws *restful.WebService, boxHandler *BoxHandler) {
 		Returns(404, "Not Found", model.BoxError{}).
 		Returns(500, "Internal Server Error", model.BoxError{}))
 
-	ws.Route(ws.DELETE("/boxes").To(boxHandler.DeleteBoxes).
-		Doc("delete all boxes").
-		Reads(model.BoxesDeleteParams{}).
-		Returns(200, "OK", model.BoxesDeleteResult{}).
-		Returns(500, "Internal Server Error", model.BoxError{}))
+	// ws.Route(ws.DELETE("/boxes").To(boxHandler.DeleteBoxes).
+	// 	Doc("delete all boxes").
+	// 	Reads(model.BoxesDeleteParams{}).
+	// 	Returns(200, "OK", model.BoxesDeleteResult{}).
+	// 	Returns(500, "Internal Server Error", model.BoxError{}))
 
-	ws.Route(ws.POST("/boxes/reclaim").To(boxHandler.ReclaimBoxes).
-		Doc("reclaim inactive boxes").
-		Returns(200, "OK", model.BoxReclaimResult{}).
-		Returns(500, "Internal Server Error", model.BoxError{}))
+	// ws.Route(ws.POST("/boxes/reclaim").To(boxHandler.ReclaimBoxes).
+	// 	Doc("reclaim inactive boxes").
+	// 	Returns(200, "OK", model.BoxReclaimResult{}).
+	// 	Returns(500, "Internal Server Error", model.BoxError{}))
 
 	// Box Runtime Operations
 	ws.Route(ws.POST("/boxes/{id}/commands").To(boxHandler.ExecBox).
@@ -75,17 +75,18 @@ func RegisterRoutes(ws *restful.WebService, boxHandler *BoxHandler) {
 		Param(ws.PathParameter("id", "identifier of the box").DataType("string")).
 		Reads(model.BoxExecParams{}).
 		Consumes(restful.MIME_JSON).
-		Produces(model.MediaTypeMultiplexedStream, model.MediaTypeRawStream).
+		Produces(restful.MIME_JSON).
 		Returns(200, "OK", model.BoxExecResult{}).
 		Returns(400, "Bad Request", model.BoxError{}).
 		Returns(404, "Not Found", model.BoxError{}).
+		Returns(409, "Conflict", model.BoxError{}).
 		Returns(500, "Internal Server Error", model.BoxError{}))
 
 	ws.Route(ws.POST("/boxes/{id}/run-code").To(boxHandler.RunBox).
 		Doc("run code in a box").
 		Param(ws.PathParameter("id", "identifier of the box").DataType("string")).
-		Reads(model.BoxRunParams{}).
-		Returns(200, "OK", model.BoxRunResult{}).
+		Reads(model.BoxRunCodeParams{}).
+		Returns(200, "OK", model.BoxRunCodeResult{}).
 		Returns(400, "Bad Request", model.BoxError{}).
 		Returns(404, "Not Found", model.BoxError{}).
 		Returns(500, "Internal Server Error", model.BoxError{}))
@@ -106,43 +107,43 @@ func RegisterRoutes(ws *restful.WebService, boxHandler *BoxHandler) {
 		Returns(404, "Not Found", model.BoxError{}).
 		Returns(500, "Internal Server Error", model.BoxError{}))
 
-	// WebSocket route for executing commands
-	ws.Route(ws.GET("/boxes/{id}/exec/ws").To(boxHandler.ExecBoxWS).
-		Doc("execute a command in a box via WebSocket").
-		Param(ws.PathParameter("id", "identifier of the box").DataType("string")).
-		Returns(400, "Bad Request", model.BoxError{}). // e.g., missing cmd parameter
-		Returns(404, "Not Found", model.BoxError{}).
-		Returns(500, "Internal Server Error", model.BoxError{})) // e.g., upgrade failed
+	// // WebSocket route for executing commands
+	// ws.Route(ws.GET("/boxes/{id}/exec/ws").To(boxHandler.ExecBoxWS).
+	// 	Doc("execute a command in a box via WebSocket").
+	// 	Param(ws.PathParameter("id", "identifier of the box").DataType("string")).
+	// 	Returns(400, "Bad Request", model.BoxError{}). // e.g., missing cmd parameter
+	// 	Returns(404, "Not Found", model.BoxError{}).
+	// 	Returns(500, "Internal Server Error", model.BoxError{})) // e.g., upgrade failed
 
-	// Box Archive Operations
-	ws.Route(ws.HEAD("/boxes/{id}/archive").To(boxHandler.HeadArchive).
-		Doc("get metadata about files in box").
-		Param(ws.PathParameter("id", "identifier of the box").DataType("string")).
-		Param(ws.QueryParameter("path", "path to get metadata from").DataType("string").Required(true)).
-		Returns(200, "OK", nil).
-		Returns(400, "Bad Request", model.BoxError{}).
-		Returns(404, "Not Found", model.BoxError{}).
-		Returns(500, "Internal Server Error", model.BoxError{}))
+	// // Box Archive Operations
+	// ws.Route(ws.HEAD("/boxes/{id}/archive").To(boxHandler.HeadArchive).
+	// 	Doc("get metadata about files in box").
+	// 	Param(ws.PathParameter("id", "identifier of the box").DataType("string")).
+	// 	Param(ws.QueryParameter("path", "path to get metadata from").DataType("string").Required(true)).
+	// 	Returns(200, "OK", nil).
+	// 	Returns(400, "Bad Request", model.BoxError{}).
+	// 	Returns(404, "Not Found", model.BoxError{}).
+	// 	Returns(500, "Internal Server Error", model.BoxError{}))
 
-	ws.Route(ws.GET("/boxes/{id}/archive").To(boxHandler.GetArchive).
-		Doc("get files from box as tar archive").
-		Param(ws.PathParameter("id", "identifier of the box").DataType("string")).
-		Param(ws.QueryParameter("path", "path to get files from").DataType("string").Required(true)).
-		Produces("application/x-tar").
-		Returns(200, "OK", nil).
-		Returns(400, "Bad Request", model.BoxError{}).
-		Returns(404, "Not Found", model.BoxError{}).
-		Returns(500, "Internal Server Error", model.BoxError{}))
+	// ws.Route(ws.GET("/boxes/{id}/archive").To(boxHandler.GetArchive).
+	// 	Doc("get files from box as tar archive").
+	// 	Param(ws.PathParameter("id", "identifier of the box").DataType("string")).
+	// 	Param(ws.QueryParameter("path", "path to get files from").DataType("string").Required(true)).
+	// 	Produces("application/x-tar").
+	// 	Returns(200, "OK", nil).
+	// 	Returns(400, "Bad Request", model.BoxError{}).
+	// 	Returns(404, "Not Found", model.BoxError{}).
+	// 	Returns(500, "Internal Server Error", model.BoxError{}))
 
-	ws.Route(ws.PUT("/boxes/{id}/archive").To(boxHandler.ExtractArchive).
-		Doc("extract tar archive to box").
-		Param(ws.PathParameter("id", "identifier of the box").DataType("string")).
-		Param(ws.QueryParameter("path", "path to extract files to").DataType("string").Required(true)).
-		Consumes("application/x-tar").
-		Returns(200, "OK", nil).
-		Returns(400, "Bad Request", model.BoxError{}).
-		Returns(404, "Not Found", model.BoxError{}).
-		Returns(500, "Internal Server Error", model.BoxError{}))
+	// ws.Route(ws.PUT("/boxes/{id}/archive").To(boxHandler.ExtractArchive).
+	// 	Doc("extract tar archive to box").
+	// 	Param(ws.PathParameter("id", "identifier of the box").DataType("string")).
+	// 	Param(ws.QueryParameter("path", "path to extract files to").DataType("string").Required(true)).
+	// 	Consumes("application/x-tar").
+	// 	Returns(200, "OK", nil).
+	// 	Returns(400, "Bad Request", model.BoxError{}).
+	// 	Returns(404, "Not Found", model.BoxError{}).
+	// 	Returns(500, "Internal Server Error", model.BoxError{}))
 
 	// Box Filesystem Operations
 	ws.Route(ws.GET("/boxes/{id}/fs/list").To(boxHandler.ListFiles).
@@ -251,5 +252,4 @@ func RegisterRoutes(ws *restful.WebService, boxHandler *BoxHandler) {
 		Returns(200, "OK", model.BoxActionTypeResult{}).
 		Returns(500, "Internal Server Error", model.BoxError{}))
 
-	//ws.
 }

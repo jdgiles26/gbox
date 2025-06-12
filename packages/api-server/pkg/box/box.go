@@ -26,9 +26,10 @@ type LinuxAndroidBoxConfig struct {
 	Labels  map[string]string            `json:"labels"`
 	Memory  float64                      `json:"memory"`
 	// This field is a union of [LinuxBoxConfigOs], [AndroidBoxConfigOs]
-	Os         LinuxAndroidBoxConfigOs `json:"os"`
-	Storage    float64                 `json:"storage"`
-	WorkingDir string                  `json:"workingDir"`
+	Os         LinuxAndroidBoxConfigOs         `json:"os"`
+	Resolution LinuxAndroidBoxConfigResolution `json:"resolution"`
+	Storage    float64                         `json:"storage"`
+	WorkingDir string                          `json:"workingDir"`
 }
 
 type LinuxAndroidBoxConfigBrowser struct {
@@ -38,6 +39,11 @@ type LinuxAndroidBoxConfigBrowser struct {
 
 type LinuxAndroidBoxConfigOs struct {
 	Version string `json:"version"`
+}
+
+type LinuxAndroidBoxConfigResolution struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
 }
 
 type BoxFile struct {

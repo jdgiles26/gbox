@@ -28,7 +28,7 @@ type BoxService interface {
 	Stop(ctx context.Context, id string) (*model.BoxStopResult, error)
 	Exec(ctx context.Context, id string, params *model.BoxExecParams) (*model.BoxExecResult, error)
 	ExecWS(ctx context.Context, id string, params *model.BoxExecWSParams, wsConn *websocket.Conn) (*model.BoxExecResult, error)
-	Run(ctx context.Context, id string, params *model.BoxRunParams) (*model.BoxRunResult, error)
+	RunCode(ctx context.Context, id string, params *model.BoxRunCodeParams) (*model.BoxRunCodeResult, error)
 
 	// Box file operations
 	GetArchive(ctx context.Context, id string, params *model.BoxArchiveGetParams) (*model.BoxArchiveResult, io.ReadCloser, error)

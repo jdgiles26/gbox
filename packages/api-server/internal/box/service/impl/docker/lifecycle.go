@@ -223,11 +223,9 @@ func (s *Service) createLinuxBox(ctx context.Context, params *model.LinuxAndroid
 	// Create a BoxCreateParams struct to use PrepareLabels function
 	// This ensures consistent labeling with the Create method
 	tempParams := &model.BoxCreateParams{
-		Image: img,
-		Env:   params.Config.Envs,
-	}
-	if params.Config.Labels != nil {
-		tempParams.ExtraLabels = params.Config.Labels
+		Image:       img,
+		Env:         params.Config.Envs,
+		ExtraLabels: params.Config.Labels,
 	}
 
 	// Use the same PrepareLabels function as Create method
@@ -277,7 +275,7 @@ func (s *Service) createLinuxBox(ctx context.Context, params *model.LinuxAndroid
 	}
 
 	// Get container details after start (same as Create method)
-	containerInfo, err := s.getContainerByID(ctx, boxID)
+	containerInfo, err := s.inspectContainerByID(ctx, boxID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get container details after start: %w", err)
 	}
@@ -301,36 +299,52 @@ func (s *Service) CreateAndroidBox(ctx context.Context, params *model.AndroidBox
 func (s *Service) Start(ctx context.Context, id string) (*model.BoxStartResult, error) {
 	containerInfo, err := s.getContainerByID(ctx, id)
 	if err != nil {
-		return &model.BoxStartResult{Success: false, Message: err.Error()}, err
+		return nil, err
 	}
 
 	if containerInfo.State == "running" {
-		return &model.BoxStartResult{Success: true, Message: fmt.Sprintf("Box %s is already running", id)}, nil
+		// Get full container details for response
+		updatedContainerInfo, err := s.inspectContainerByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		box := containerToBox(updatedContainerInfo)
+		return box, nil
 	}
 
 	err = s.client.ContainerStart(ctx, containerInfo.ID, container.StartOptions{})
 	if err != nil {
-		return &model.BoxStartResult{
-			Success: false,
-			Message: fmt.Sprintf("failed to start container: %v", err),
-		}, fmt.Errorf("failed to start container: %w", err)
+		return nil, fmt.Errorf("failed to start container: %w", err)
 	}
 
 	// Update access time on successful start
 	s.accessTracker.Update(id)
 
-	return &model.BoxStartResult{Success: true, Message: fmt.Sprintf("Box %s started successfully", id)}, nil
+	// Get updated container details after start
+	updatedContainerInfo, err := s.inspectContainerByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get container details after start: %w", err)
+	}
+
+	box := containerToBox(updatedContainerInfo)
+	return box, nil
 }
 
 // Stop implements Service.Stop
 func (s *Service) Stop(ctx context.Context, id string) (*model.BoxStopResult, error) {
 	containerInfo, err := s.getContainerByID(ctx, id)
 	if err != nil {
-		return &model.BoxStopResult{Success: false, Message: err.Error()}, err
+		return nil, err
 	}
 
 	if containerInfo.State != "running" {
-		return &model.BoxStopResult{Success: true, Message: fmt.Sprintf("Box %s is already stopped", id)}, nil
+		// Get full container details for response
+		updatedContainerInfo, err := s.inspectContainerByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		box := containerToBox(updatedContainerInfo)
+		return box, nil
 	}
 
 	stopTimeout := int(defaultStopTimeout.Seconds())
@@ -338,13 +352,17 @@ func (s *Service) Stop(ctx context.Context, id string) (*model.BoxStopResult, er
 		Timeout: &stopTimeout,
 	})
 	if err != nil {
-		return &model.BoxStopResult{
-			Success: false,
-			Message: fmt.Sprintf("failed to stop container: %v", err),
-		}, fmt.Errorf("failed to stop container: %w", err)
+		return nil, fmt.Errorf("failed to stop container: %w", err)
 	}
 
-	return &model.BoxStopResult{Success: true, Message: fmt.Sprintf("Box %s stopped successfully", id)}, nil
+	// Get updated container details after stop
+	updatedContainerInfo, err := s.inspectContainerByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get container details after stop: %w", err)
+	}
+
+	box := containerToBox(updatedContainerInfo)
+	return box, nil
 }
 
 // Delete implements Service.Delete

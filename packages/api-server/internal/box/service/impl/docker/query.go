@@ -19,7 +19,7 @@ const (
 
 // Get implements Service.Get
 func (s *Service) Get(ctx context.Context, id string) (*model.Box, error) {
-	container, err := s.getContainerByID(ctx, id)
+	container, err := s.inspectContainerByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}

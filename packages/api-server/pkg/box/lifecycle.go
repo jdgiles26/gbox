@@ -109,29 +109,13 @@ type BoxesDeleteResult struct {
 	IDs     []string `json:"ids,omitempty"` // IDs of deleted boxes
 }
 
-// OperationResult represents a generic result for simple success/failure operations.
-type OperationResult struct {
-	Success bool   `json:"success"`
-	Message string `json:"message,omitempty"`
+// BoxStartResult represents a response from starting a box.
+// Returns the complete box information after starting.
+type BoxStartResult = Box
 
-	ID        string               `json:"id"`
-	Config    CreateBoxConfigParam `json:"config"`
-	CreatedAt time.Time            `json:"createdAt"`
-	ExpiresAt time.Time            `json:"expiresAt"`
-	Status    string               `json:"status"`
-	Type      string               `json:"type"`
-	UpdatedAt time.Time            `json:"updatedAt"`
-}
-
-// BoxStartResult is an alias for OperationResult, representing a response from starting a box.
-// Using an alias maintains semantic clarity at the call sites.
-// DEPRECATED: Use OperationResult directly or define specific result types if they diverge.
-type BoxStartResult = OperationResult
-
-// BoxStopResult is an alias for OperationResult, representing a response from stopping a box.
-// Using an alias maintains semantic clarity at the call sites.
-// DEPRECATED: Use OperationResult directly or define specific result types if they diverge.
-type BoxStopResult = OperationResult
+// BoxStopResult represents a response from stopping a box.
+// Returns the complete box information after stopping.
+type BoxStopResult = Box
 
 // BoxReclaimResult represents a response from reclaiming boxes
 type BoxReclaimResult struct {

@@ -354,11 +354,11 @@ func (s *Service) Exec(ctx context.Context, id string, req *model.BoxExecParams)
 
 	// Create stream options
 	streamOptions := remotecommand.StreamOptions{
-		Stdin:             req.Conn,
-		Stdout:            req.Conn,
-		Stderr:            req.Conn,
+		Stdin:             nil,
+		Stdout:            nil,
+		Stderr:            nil,
 		TerminalSizeQueue: nil, // We don't need terminal size queue for now
-		Tty:               req.TTY,
+		Tty:               false,
 	}
 
 	// Start streaming with context
@@ -372,9 +372,9 @@ func (s *Service) Exec(ctx context.Context, id string, req *model.BoxExecParams)
 	}, nil
 }
 
-// Run runs a command in a box
-func (s *Service) Run(ctx context.Context, id string, req *model.BoxRunParams) (*model.BoxRunResult, error) {
-	return nil, fmt.Errorf("run operation not implemented for K8s")
+// RunCode runs a command in a box
+func (s *Service) RunCode(ctx context.Context, id string, req *model.BoxRunCodeParams) (*model.BoxRunCodeResult, error) {
+	return nil, fmt.Errorf("run-code operation not implemented for K8s")
 }
 
 // ExecWS executes a command in a box via WebSocket (Not Implemented for K8s)
