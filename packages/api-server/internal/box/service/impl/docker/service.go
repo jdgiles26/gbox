@@ -11,15 +11,15 @@ import (
 	"github.com/babelcloud/gbox/packages/api-server/pkg/logger"
 )
 
-// Service implements the box service interface using Docker
+// Service implements the box service interface using Docker.
 type Service struct {
 	client        *client.Client
 	logger        *logger.Logger
 	accessTracker tracker.AccessTracker
-	imageManager  *ImageManager
+	imageService  *ImageService
 }
 
-// NewService creates a new Docker service instance
+// NewService creates a new Docker service instance.
 func NewService(tracker tracker.AccessTracker) (*Service, error) {
 	cfg := config.GetInstance()
 	dockerHost := cfg.Cluster.Docker.Host
@@ -31,22 +31,22 @@ func NewService(tracker tracker.AccessTracker) (*Service, error) {
 
 	log := logger.New()
 
-	// Create and start ImageManager
-	imageManager := NewImageManager(cli, log)
-	imageManager.Start()
+	// Create and start ImageService.
+	imageService := NewImageService(cli, log)
+	imageService.Start()
 
 	return &Service{
 		client:        cli,
 		logger:        log,
 		accessTracker: tracker,
-		imageManager:  imageManager,
+		imageService:  imageService,
 	}, nil
 }
 
-// Close gracefully shuts down the service
+// Close gracefully shuts down the service.
 func (s *Service) Close() error {
-	if s.imageManager != nil {
-		s.imageManager.Stop()
+	if s.imageService != nil {
+		s.imageService.Stop()
 	}
 	if s.client != nil {
 		return s.client.Close()

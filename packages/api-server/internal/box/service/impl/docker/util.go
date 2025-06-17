@@ -429,3 +429,31 @@ func ProcessPullProgress(reader io.Reader, writer io.Writer) error {
 
 	return nil
 }
+
+// parseImageTag parses a full image reference (e.g., "ubuntu:latest", "ubuntu", "library/ubuntu")
+// into a repository and a tag.
+func parseImageTag(imageRef string) (string, string, bool) {
+	// The canonical implementation is docker/distribution's reference.ParseNamed
+	// but using a simpler string split for now to avoid extra dependencies.
+	// Note: This doesn't handle digests, only tags.
+	if !strings.Contains(imageRef, "/") {
+		imageRef = "docker.io/library/" + imageRef
+	}
+
+	parts := strings.Split(imageRef, ":")
+	if len(parts) == 1 {
+		// No tag, default to "latest".
+		return imageRef, "latest", true
+	}
+
+	tag := parts[len(parts)-1]
+	repo := strings.Join(parts[:len(parts)-1], ":")
+
+	// This logic handles cases like "myregistry:5000/my/image:tag".
+	if !strings.Contains(tag, "/") {
+		return repo, tag, true
+	}
+
+	// The last part was not a tag, so it's part of the repo name.
+	return imageRef, "latest", true
+}
