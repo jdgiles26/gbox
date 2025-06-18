@@ -23,6 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrandr2 \
     xdg-utils \
     chromium \
+    socat \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -46,8 +47,8 @@ COPY supervisord.conf /etc/supervisor/conf.d/playwright.conf
 ARG PLAYWRIGHT_VERSION
 RUN sed -i "s|__PLAYWRIGHT_VERSION__|${PLAYWRIGHT_VERSION}|g" /etc/supervisor/conf.d/playwright.conf
 
-# Expose Playwright port
-EXPOSE 3000
+# Expose ports
+EXPOSE 3000 7681 9222
 
 # Add health check (relevant for browser stage)
 HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=3 \

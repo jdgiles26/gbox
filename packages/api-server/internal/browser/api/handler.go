@@ -308,7 +308,25 @@ func executeSpecificAction[P any, R any]( // P: Params type, R: Result type
 
 // GetCdpURL handles GET /boxes/{id}/browser/connect-url/cdp
 func (h *Handler) GetCdpURL(req *restful.Request, resp *restful.Response) {
-	writeError(resp, http.StatusNotImplemented, fmt.Errorf("This feature is exclusively available in the cloud version. Learn more at https://gbox.cloud/."))
+	boxID := req.PathParameter("id")
+	if boxID == "" {
+		writeError(resp, http.StatusBadRequest, fmt.Errorf("box ID is required"))
+		return
+	}
+
+	cdpURL, err := h.service.GetCdpURL(boxID)
+	if err != nil {
+		if errors.Is(err, browserSvc.ErrBoxNotFound) {
+			writeError(resp, http.StatusNotFound, err)
+		} else {
+			writeError(resp, http.StatusInternalServerError, fmt.Errorf("failed to get CDP URL: %w", err))
+		}
+		return
+	}
+
+	result := model.NewCdpURLResult(cdpURL)
+	resp.WriteHeader(http.StatusOK)
+	_ = resp.WriteAsJson(result)
 }
 
 // GetConnectURL handles GET /boxes/{id}/browser/connect-url
