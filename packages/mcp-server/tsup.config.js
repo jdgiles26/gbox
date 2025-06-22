@@ -9,8 +9,13 @@ export default {
     dts: true,
     splitting: false,
     keepNames: true,
-    external: ['node:*'],
-    noExternal: [/(.*)/],
+    external: [
+        'node:*',
+        'playwright',
+        'playwright-core',
+        'chromium-bidi',
+        '@playwright/test'
+    ],
     banner: {
         js: `import { createRequire } from 'module'; const require = createRequire(import.meta.url);`,
     },
