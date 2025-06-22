@@ -1,4 +1,4 @@
-import { gbox, NotFoundError } from './gbox.instance.js';
+import { gbox, gboxClient, NotFoundError } from './gbox.instance.js';
 import { CreateLinux, LinuxBoxOperator } from 'gbox-sdk/wrapper/box/linux';
 import { BoxRunCodeParams, BoxRunCodeResponse } from 'gbox-sdk/resources/v1/boxes';
 
@@ -194,6 +194,21 @@ export class BoxService {
             return result;
         } catch (error) {
             throw error;
+        }
+    }
+
+    async getBoxCdpUrl(id: string, context: { signal?: AbortSignal; sessionId?: string } = {}): Promise<string | null> {
+        try {
+            const cdpUrl = await gboxClient.v1.boxes.browser.cdpURL(id, {
+                signal: context.signal,
+            });
+            return cdpUrl;
+        } catch (error) {
+            if (error instanceof NotFoundError) {
+                return null;
+            } else {
+                throw error;
+            }
         }
     }
 }
