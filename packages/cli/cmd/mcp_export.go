@@ -14,8 +14,9 @@ import (
 
 // Define the structure for the new MCP server entry using URL
 type McpServerEntry struct {
-	Command string   `json:"command"`
-	Args    []string `json:"args"`
+	Command string            `json:"command"`
+	Args    []string          `json:"args"`
+	Env     map[string]string `json:"env,omitempty"`
 }
 
 // Keep McpConfig using the specific new entry type for generation
@@ -31,17 +32,40 @@ type GenericMcpConfig struct {
 func NewMcpExportCommand() *cobra.Command {
 	var mergeTo string
 	var dryRun bool
+	var serverType string
 
 	cmd := &cobra.Command{
 		Use:   "export",
 		Short: "Export MCP configuration for Claude Desktop/Cursor",
+		Long: `Export MCP server configuration for Claude Desktop, Cursor, or Claude-Code.
+
+Supports both Linux and Android MCP servers. The Linux server provides general 
+box management capabilities, while the Android server provides Android-specific 
+automation tools including screenshot capture, AI-powered UI actions, and APK management.`,
+
+		Example: `  # Export Linux MCP server configuration (default)
+  gbox mcp export --type linux --merge-to claude
+  
+  # Export Android MCP server configuration  
+  gbox mcp export --type android --merge-to claude
+  
+  # Generate claude mcp add command for claude-code
+  gbox mcp export --type android --merge-to claude-code
+  
+  # Preview configuration without merging
+  gbox mcp export --type android --dry-run`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return exportConfig(mergeTo, dryRun)
+			return exportConfig(mergeTo, dryRun, serverType)
 		},
 	}
 
-	cmd.Flags().StringVarP(&mergeTo, "merge-to", "m", "", "Merge configuration into target config file (claude|cursor)")
+	cmd.Flags().StringVarP(&mergeTo, "merge-to", "m", "", "Merge configuration into target config file (claude|cursor|claude-code)")
 	cmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "Preview merge result without applying changes")
+	cmd.Flags().StringVarP(&serverType, "type", "t", "linux", "MCP server type (linux|android)")
+
+	cmd.RegisterFlagCompletionFunc("type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"linux", "android"}, cobra.ShellCompDirectiveNoFileComp
+	})
 
 	return cmd
 }
@@ -71,7 +95,7 @@ func getPackagesRootPath() (string, error) {
 		cwd, err := os.Getwd()
 		if err == nil {
 			packagesDir := filepath.Join(cwd, "packages")
-			if dirExists(filepath.Join(packagesDir, "mcp-server")) {
+			if dirExists(filepath.Join(packagesDir, "mcp-server")) || dirExists(filepath.Join(packagesDir, "mcp-android-server")) {
 				return packagesDir, nil
 			}
 		}
@@ -87,7 +111,7 @@ func getPackagesRootPath() (string, error) {
 	packagesDir := realExecPath[:packagesIndex]
 	packagesDir = filepath.Clean(filepath.Join(packagesDir, "packages"))
 
-	if dirExists(filepath.Join(packagesDir, "mcp-server")) {
+	if dirExists(filepath.Join(packagesDir, "mcp-server")) || dirExists(filepath.Join(packagesDir, "mcp-android-server")) {
 		return packagesDir, nil
 	}
 
@@ -102,21 +126,36 @@ func dirExists(path string) bool {
 	return info.IsDir()
 }
 
-func exportConfig(mergeTo string, dryRun bool) error {
+func exportConfig(mergeTo string, dryRun bool, serverType string) error {
+	// Validate server type
+	if serverType != "linux" && serverType != "android" {
+		return fmt.Errorf("invalid server type '%s', must be either 'linux' or 'android'", serverType)
+	}
+
 	packagesRoot, err := getPackagesRootPath()
 	if err != nil {
 		return fmt.Errorf("failed to find project root: %w", err)
 	}
 
-	mcpServerDir := filepath.Join(packagesRoot, "mcp-server")
-	serverScript := filepath.Join(mcpServerDir, "dist", "index.js")
+	var mcpServerDir, serverScript string
+	var serverName string
+
+	// Select server directory and script based on type
+	if serverType == "android" {
+		mcpServerDir = filepath.Join(packagesRoot, "mcp-android-server")
+		serverScript = filepath.Join(mcpServerDir, "dist", "index.js")
+		serverName = "gbox-android"
+	} else {
+		mcpServerDir = filepath.Join(packagesRoot, "mcp-server")
+		serverScript = filepath.Join(mcpServerDir, "dist", "index.js")
+		serverName = "gbox"
+	}
 
 	if _, err := os.Stat(serverScript); os.IsNotExist(err) {
 		return fmt.Errorf("server script not found at %s\nPlease build the MCP server first by running:\n  cd %s && pnpm build", serverScript, mcpServerDir)
 	}
 
 	serverScriptAbs, err := filepath.Abs(serverScript)
-
 	if err != nil {
 		return fmt.Errorf("failed to get absolute path for server script: %w", err)
 	}
@@ -133,7 +172,7 @@ func exportConfig(mergeTo string, dryRun bool) error {
 	if os.Getenv("DEBUG") == "true" {
 		configToExport = McpConfig{
 			McpServers: map[string]McpServerEntry{
-				"gbox": {
+				serverName: {
 					Command: "bash",
 					Args:    []string{"-c", fmt.Sprintf("cd %s && pnpm --silent dev", mcpServerDir)},
 				},
@@ -141,18 +180,27 @@ func exportConfig(mergeTo string, dryRun bool) error {
 		}
 
 	} else if os.Getenv("SSE_MODE") == "true" {
+		// For SSE mode, adjust URL based on server type
+		var sseUrl string
+		if serverType == "android" {
+			// Android server uses port 28091 for SSE
+			sseUrl = "http://localhost:28091/sse"
+		} else {
+			sseUrl = config.GetMcpServerUrl()
+		}
+
 		configToExport = McpConfig{
 			McpServers: map[string]McpServerEntry{
-				"gbox": {
+				serverName: {
 					Command: "npx",
-					Args:    []string{"mcp-remote", config.GetMcpServerUrl()}, // Use formatted URL
+					Args:    []string{"mcp-remote", sseUrl},
 				},
 			},
 		}
 	} else {
 		configToExport = McpConfig{
 			McpServers: map[string]McpServerEntry{
-				"gbox": {
+				serverName: {
 					Command: "node",
 					Args:    []string{serverScriptAbs},
 				},
@@ -161,8 +209,13 @@ func exportConfig(mergeTo string, dryRun bool) error {
 	}
 
 	if mergeTo != "" {
-		if mergeTo != "claude" && mergeTo != "cursor" {
-			return fmt.Errorf("--merge-to target must be either 'claude' or 'cursor'")
+		if mergeTo != "claude" && mergeTo != "cursor" && mergeTo != "claude-code" {
+			return fmt.Errorf("--merge-to target must be either 'claude', 'cursor', or 'claude-code'")
+		}
+
+		// Handle claude-code option by outputting claude mcp add command
+		if mergeTo == "claude-code" {
+			return outputClaudeCodeCommand(serverType, serverScriptAbs, mcpServerDir, dryRun)
 		}
 
 		targetConfig := claudeConfig
@@ -206,8 +259,17 @@ func exportConfig(mergeTo string, dryRun bool) error {
 		fmt.Println(string(output))
 		fmt.Println()
 		fmt.Println("To merge this configuration, run:")
-		fmt.Println("  gbox mcp export --merge-to claude   # For Claude Desktop")
-		fmt.Println("  gbox mcp export --merge-to cursor   # For Cursor")
+		fmt.Printf("  gbox mcp export --type %s --merge-to claude      # For Claude Desktop\n", serverType)
+		fmt.Printf("  gbox mcp export --type %s --merge-to cursor      # For Cursor\n", serverType)
+		fmt.Printf("  gbox mcp export --type %s --merge-to claude-code # For Claude-Code (generates claude mcp add command)\n", serverType)
+		fmt.Println()
+		fmt.Println("Available server types:")
+		fmt.Println("  --type linux    # Export Linux MCP server configuration (default)")
+		fmt.Println("  --type android  # Export Android MCP server configuration (using profile or manually set GBOX_API_KEY env)")
+		if serverType == "android" {
+			fmt.Println()
+			fmt.Println("Note: Android server will automatically use API key from current profile or GBOX_API_KEY env var")
+		}
 	}
 
 	return nil
@@ -261,4 +323,44 @@ func mergeAndMarshalConfigs(targetPath string, newConfig McpConfig) ([]byte, err
 	}
 
 	return mergedJSON, nil
+}
+
+// outputClaudeCodeCommand outputs the claude mcp add command for claude-code integration
+func outputClaudeCodeCommand(serverType, serverScriptAbs, mcpServerDir string, dryRun bool) error {
+	serverName := "gbox"
+	if serverType == "android" {
+		serverName = "gbox-android"
+	}
+
+	// Prepare environment variables
+	var envArgs []string
+	envArgs = append(envArgs, "-e", "MODE=stdio")
+
+	// Check if we're in debug mode
+	if os.Getenv("DEBUG") == "true" {
+		// For debug mode, use pnpm dev
+		fmt.Println("Copy and execute the following command in your target directory:")
+		fmt.Println("----------------------------------------")
+		fmt.Printf("claude mcp add %s", serverName)
+		for _, arg := range envArgs {
+			fmt.Printf(" %s", arg)
+		}
+		fmt.Printf(" -- bash -c \"cd %s && pnpm --silent dev\"\n", mcpServerDir)
+	} else {
+		// For production mode, use the built script
+		fmt.Println("Copy and execute the following command in your target directory:")
+		fmt.Println("----------------------------------------")
+		fmt.Printf("claude mcp add %s", serverName)
+		for _, arg := range envArgs {
+			fmt.Printf(" %s", arg)
+		}
+		fmt.Printf(" -- node %s\n", serverScriptAbs)
+	}
+
+	fmt.Println()
+	if serverType == "android" {
+		fmt.Println("Note: Android mcp server will automatically use API key from current profile.")
+	}
+
+	return nil
 }
