@@ -30,7 +30,7 @@ export {
   handleGetScreenshot,
 } from "./screenshot.js";
 
-// AI Action
+// UI Action
 export {
   UI_ACTION_TOOL,
   UI_ACTION_DESCRIPTION,
