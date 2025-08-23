@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # gbox API Server
+  gbox-api:
+    build:
+      context: ./packages/api-server
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_PORT=8080
+      - CLUSTER_MODE=docker
+      - LOG_LEVEL=info
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - gbox-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # gbox Web UI
+  gbox-web-ui:
+    build:
+      context: ./packages/web-ui
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - GBOX_API_URL=http://gbox-api:8080
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+    depends_on:
+      gbox-api:
+        condition: service_healthy
+    networks:
+      - gbox-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Nginx reverse proxy
+  gbox-proxy:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - gbox-api
+      - gbox-web-ui
+    networks:
+      - gbox-network
+
+networks:
+  gbox-network:
+    driver: bridge
+
+volumes:
+  gbox-data:

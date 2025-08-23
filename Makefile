@@ -244,6 +244,26 @@ mcp-android: build ## Start mcp android server with distribution package
 	@echo "Starting mcp android server with distribution package..."
 	@cd packages/mcp-android-server && pnpm inspect:dist
 
+web-ui-dev: ## Start web UI development server
+	@echo "Starting web UI development server..."
+	@cd packages/web-ui && npm run dev
+
+web-ui-build: ## Build web UI
+	@echo "Building web UI..."
+	@cd packages/web-ui && npm run build
+
+web-ui-start: web-ui-build ## Start web UI production server with PM2
+	@echo "Starting web UI production server..."
+	@cd packages/web-ui && make pm2-start
+
+web-ui-stop: ## Stop web UI PM2 server
+	@echo "Stopping web UI server..."
+	@cd packages/web-ui && make pm2-stop
+
+web-ui-docker: ## Build and run web UI in Docker
+	@echo "Building and running web UI in Docker..."
+	@cd packages/web-ui && make docker-build && make docker-run
+
 e2e: ## Run e2e tests
 	@echo "Running e2e tests..."
 	@make -C packages/cli e2e
